@@ -30,7 +30,7 @@ import {
  *
  * Uses a redirect-based flow: the backend generates a session token and
  * buy/sell quote, returns a Coinbase widget URL, and the mobile app opens
- * it in a WebView. Transaction completion is detected via background polling.
+ * it in a WebView. Polling is handled by BullMQ workers.
  */
 export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
   readonly providerCode: Provider = 'COINBASE_CDP';
@@ -149,14 +149,10 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     const blockchain = params.blockchain ?? 'POLYGON_AMOY';
     const country = params.country ?? config.coinbase.defaultCountry;
 
-    if (!walletAddress) {
-      throw new Error('walletAddress is required for Coinbase CDP deposit');
-    }
-
     // 1. Create session token
     const session = await this.createSessionToken(walletAddress, blockchain);
 
-    // 2. Get buy quote (with destination address to get onramp URL)
+    // 2. Get buy quote
     const quoteResponse = await this.request<CoinbaseBuyQuoteResponse>(
       'POST',
       '/onramp/v1/buy/quote',
@@ -200,7 +196,6 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
   }
 
   async getDepositStatus(providerRef: string): Promise<DepositResult> {
-    // providerRef format: "userId:quoteId"
     const [userId, quoteId] = this.parseProviderRef(providerRef);
     const partnerUserRef = `pulapay_${userId}`;
 
@@ -233,14 +228,10 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     const country = params.country ?? config.coinbase.defaultCountry;
     const cashoutCurrency = params.cashoutCurrency ?? params.currency;
 
-    if (!walletAddress) {
-      throw new Error('walletAddress is required for Coinbase CDP payout');
-    }
-
     // 1. Create session token
     const session = await this.createSessionToken(walletAddress, blockchain);
 
-    // 2. Get sell quote (with source address to get offramp URL)
+    // 2. Get sell quote
     const partnerUserId = `pulapay_${params.userId}`;
     const quoteResponse = await this.request<CoinbaseSellQuoteResponse>(
       'POST',
@@ -313,109 +304,13 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
   }
 
   validateWebhook(_headers: Record<string, string>, body: unknown): boolean {
-    // Coinbase CDP webhooks are still "under development"
-    // For now, validate the expected payload shape
     const payload = body as CoinbaseCdpWebhookPayload;
     return !!(payload?.event_type && payload?.transaction_id);
   }
 
   // ============================================
-  // Polling
-  // ============================================
-
-  startDepositPolling(
-    providerRef: string,
-    onStatusChange: (result: DepositResult) => Promise<void>
-  ): void {
-    this.pollUntilComplete(providerRef, 'deposit', onStatusChange).catch((error) => {
-      logger.error({ error, providerRef }, 'Background Coinbase deposit polling failed');
-    });
-  }
-
-  startPayoutPolling(
-    providerRef: string,
-    onStatusChange: (result: PayoutResult) => Promise<void>
-  ): void {
-    this.pollUntilComplete(providerRef, 'payout', onStatusChange).catch((error) => {
-      logger.error({ error, providerRef }, 'Background Coinbase payout polling failed');
-    });
-  }
-
-  async pollDepositUntilComplete(
-    providerRef: string,
-    onStatusChange?: (result: DepositResult) => Promise<void>
-  ): Promise<DepositResult> {
-    return this.pollUntilComplete(providerRef, 'deposit', onStatusChange);
-  }
-
-  async pollPayoutUntilComplete(
-    providerRef: string,
-    onStatusChange?: (result: PayoutResult) => Promise<void>
-  ): Promise<PayoutResult> {
-    return this.pollUntilComplete(providerRef, 'payout', onStatusChange);
-  }
-
-  // ============================================
   // Private helpers
   // ============================================
-
-  private async pollUntilComplete(
-    providerRef: string,
-    type: 'deposit' | 'payout',
-    onStatusChange?: (result: DepositResult | PayoutResult) => Promise<void>
-  ): Promise<DepositResult | PayoutResult> {
-    const intervalMs = config.coinbase.pollingIntervalMs;
-    const maxAttempts = config.coinbase.pollingMaxAttempts;
-    const [userId, quoteId] = this.parseProviderRef(providerRef);
-    const partnerUserRef = `pulapay_${userId}`;
-    const endpoint =
-      type === 'deposit'
-        ? `/onramp/v1/buy/user/${partnerUserRef}/transactions`
-        : `/onramp/v1/sell/user/${partnerUserRef}/transactions`;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const response = await this.request<CoinbaseTransactionsResponse>(
-          'GET',
-          endpoint
-        );
-
-        const tx = response.transactions?.find(
-          (t) => t.transaction_id === quoteId
-        );
-
-        if (tx) {
-          const status = this.mapCoinbaseStatus(tx.status);
-
-          logger.debug(
-            { providerRef, attempt, maxAttempts, coinbaseStatus: tx.status, status },
-            `Polling Coinbase ${type} status`
-          );
-
-          if (status === 'completed' || status === 'failed') {
-            const result: DepositResult = { providerRef: quoteId, status };
-            if (onStatusChange) await onStatusChange(result);
-            return result;
-          }
-        }
-      } catch (error) {
-        logger.warn(
-          { error, providerRef, attempt },
-          `Coinbase ${type} polling error`
-        );
-      }
-
-      if (attempt < maxAttempts) {
-        await this.delay(intervalMs);
-      }
-    }
-
-    logger.warn(
-      { providerRef, maxAttempts },
-      `Coinbase ${type} polling reached max attempts`
-    );
-    return { providerRef: quoteId, status: 'pending' };
-  }
 
   private mapCoinbaseStatus(
     status: CoinbaseTransactionStatus
@@ -426,9 +321,6 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     return 'pending';
   }
 
-  /**
-   * Parse composite providerRef format: "userId:quoteId"
-   */
   private parseProviderRef(providerRef: string): [string, string] {
     const separatorIndex = providerRef.indexOf(':');
     if (separatorIndex === -1) {
@@ -440,9 +332,6 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     ];
   }
 
-  /**
-   * Map internal blockchain enum names to Coinbase network names.
-   */
   private mapBlockchainName(blockchain: string): string {
     const mapping: Record<string, string> = {
       POLYGON_AMOY: 'polygon',
@@ -453,9 +342,5 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
       ARBITRUM_SEPOLIA: 'arbitrum',
     };
     return mapping[blockchain] ?? 'polygon';
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

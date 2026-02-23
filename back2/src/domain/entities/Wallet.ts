@@ -4,6 +4,8 @@ import { Money } from '../value-objects/Money';
 import { WalletAddress } from '../value-objects/WalletAddress';
 import { InsufficientFundsError } from '../errors/InsufficientFundsError';
 import { WalletFrozenError } from '../errors/WalletFrozenError';
+import { walletMachine } from '../state-machines/wallet.machine';
+import { applyTransition } from '../state-machines/helpers';
 
 export interface WalletProps {
   id: string;
@@ -19,7 +21,7 @@ export interface WalletProps {
 }
 
 /**
- * Wallet entity with Circle integration
+ * Wallet entity — delegates state transitions to XState machine
  */
 export class Wallet {
   private _balance: Decimal;
@@ -108,7 +110,16 @@ export class Wallet {
     }
   }
 
-  // Balance operations
+  // XState context for machine
+  private get machineContext() {
+    return {
+      walletId: this.props.id,
+      circleWalletId: this.props.circleWalletId,
+      balanceUsdc: this._balance.toFixed(6),
+    };
+  }
+
+  // Balance operations (not state transitions)
   credit(amount: Decimal): Decimal {
     if (amount.lt(0)) {
       throw new Error('Credit amount must be positive');
@@ -127,35 +138,34 @@ export class Wallet {
     return this._balance;
   }
 
-  // Set balance directly (for sync with Circle)
   syncBalance(balance: Decimal): void {
     this._balance = balance;
     this.props.balanceUsdc = balance;
     this.props.updatedAt = new Date();
   }
 
-  // Status transitions
+  // Status transitions (delegated to XState)
   activate(): void {
-    if (this.props.status !== 'PENDING') {
-      throw new Error(`Cannot activate wallet from status: ${this.props.status}`);
-    }
-    this.props.status = 'ACTIVE';
+    const { newStatus } = applyTransition(
+      walletMachine, this.props.status, { type: 'ACTIVATE', circleWalletId: this.props.circleWalletId }, this.machineContext,
+    );
+    this.props.status = newStatus as WalletStatus;
     this.props.updatedAt = new Date();
   }
 
   freeze(): void {
-    if (this.props.status !== 'ACTIVE') {
-      throw new Error(`Cannot freeze wallet from status: ${this.props.status}`);
-    }
-    this.props.status = 'FROZEN';
+    const { newStatus } = applyTransition(
+      walletMachine, this.props.status, { type: 'FREEZE' }, this.machineContext,
+    );
+    this.props.status = newStatus as WalletStatus;
     this.props.updatedAt = new Date();
   }
 
   unfreeze(): void {
-    if (this.props.status !== 'FROZEN') {
-      throw new Error(`Cannot unfreeze wallet from status: ${this.props.status}`);
-    }
-    this.props.status = 'ACTIVE';
+    const { newStatus } = applyTransition(
+      walletMachine, this.props.status, { type: 'UNFREEZE' }, this.machineContext,
+    );
+    this.props.status = newStatus as WalletStatus;
     this.props.updatedAt = new Date();
   }
 
@@ -163,7 +173,10 @@ export class Wallet {
     if (!this._balance.eq(0)) {
       throw new Error('Cannot close wallet with non-zero balance');
     }
-    this.props.status = 'CLOSED';
+    const { newStatus } = applyTransition(
+      walletMachine, this.props.status, { type: 'CLOSE' }, this.machineContext,
+    );
+    this.props.status = newStatus as WalletStatus;
     this.props.updatedAt = new Date();
   }
 

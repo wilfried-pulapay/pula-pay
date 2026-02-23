@@ -120,7 +120,7 @@ describe('LedgerService', () => {
       expect(entries.length).toBeGreaterThanOrEqual(2);
 
       // Verify balance: sum of all amounts should be 0
-      const sum = entries.reduce(
+      entries.reduce(
         (acc, e) => acc.add(e.entryType === 'CREDIT' ? e.amountUsdc : e.amountUsdc.neg()),
         new Decimal(0)
       );

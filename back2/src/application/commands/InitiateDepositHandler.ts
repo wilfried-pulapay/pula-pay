@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { Queue } from 'bullmq';
 import { Currency } from '@prisma/client';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
@@ -9,6 +10,7 @@ import { WalletNotFoundError } from '../../domain/errors/WalletNotFoundError';
 import { generateIdempotencyKey } from '../../shared/utils/idempotency';
 import { config } from '../../shared/config';
 import { logger } from '../../shared/utils/logger';
+import type { CoinbasePollingJobData } from '../../infrastructure/jobs/workers/coinbase-poll.worker';
 
 export interface InitiateDepositCommand {
   userId: string;
@@ -39,7 +41,9 @@ export class InitiateDepositHandler {
     private readonly walletRepo: WalletRepository,
     private readonly txRepo: TransactionRepository,
     private readonly onRampProvider: OnRampProvider,
-    private readonly exchangeRateProvider: ExchangeRateProvider
+    private readonly exchangeRateProvider: ExchangeRateProvider,
+    private readonly coinbasePollingQueue: Queue<CoinbasePollingJobData>,
+    private readonly txExpiryQueue: Queue,
   ) {}
 
   async execute(command: InitiateDepositCommand): Promise<InitiateDepositResult> {
@@ -68,7 +72,7 @@ export class InitiateDepositHandler {
       type: 'DEPOSIT_ONRAMP',
       status: 'PENDING',
       amountUsdc,
-      feeUsdc: new Decimal(0), // Fee calculated on confirmation
+      feeUsdc: new Decimal(0),
       exchangeRate: rate.rate,
       displayCurrency: command.fiatCurrency,
       displayAmount: new Decimal(command.fiatAmount),
@@ -81,7 +85,7 @@ export class InitiateDepositHandler {
       amount: command.fiatAmount,
       currency: command.fiatCurrency,
       idempotencyKey,
-      callbackUrl: `${config.apiUrl}/webhooks/coinbase-cdp`,
+      callbackUrl: `${config.apiUrl}/api/v2/webhooks/coinbase-cdp`,
       walletAddress: wallet.address,
       blockchain: wallet.blockchain,
       country: command.country ?? config.coinbase.defaultCountry,
@@ -99,7 +103,6 @@ export class InitiateDepositHandler {
     });
 
     // 7. Update status → PROCESSING
-    // Store composite providerRef (userId:quoteId) for polling
     const compositeRef = `${command.userId}:${depositResult.providerRef}`;
     transaction.markProcessing(depositResult.providerRef);
     await this.txRepo.update(transaction);
@@ -114,52 +117,32 @@ export class InitiateDepositHandler {
       'Deposit initiated'
     );
 
-    // 8. Start background polling as fallback for callbacks
-    if (this.onRampProvider.startDepositPolling) {
-      this.onRampProvider.startDepositPolling(
-        compositeRef,
-        async (pollResult) => {
-          await this.handlePollingResult(transaction.id, pollResult);
-        }
-      );
-    }
+    // 8. Enqueue BullMQ polling job (durable, survives restarts)
+    await this.coinbasePollingQueue.add(
+      `poll-deposit-${transaction.id}`,
+      {
+        transactionId: transaction.id,
+        partnerUserRef: compositeRef,
+        type: 'ONRAMP' as const,
+        idempotencyKey,
+      },
+      {
+        delay: 15_000,
+        jobId: idempotencyKey,
+      },
+    );
+
+    // 9. Schedule expiry (10 min timeout)
+    await this.txExpiryQueue.add(
+      `expire-${transaction.id}`,
+      { transactionId: transaction.id },
+      {
+        delay: 600_000,
+        jobId: `expire-${idempotencyKey}`,
+      },
+    );
 
     return this.toResult(transaction, depositResult.providerRef, depositResult.paymentUrl, depositResult.fees);
-  }
-
-  private async handlePollingResult(
-    transactionId: string,
-    pollResult: { status: 'pending' | 'processing' | 'completed' | 'failed' }
-  ): Promise<void> {
-    const transaction = await this.txRepo.findById(transactionId);
-    if (!transaction) {
-      logger.warn({ transactionId }, 'Transaction not found during polling callback');
-      return;
-    }
-
-    // Skip if already in terminal state
-    if (transaction.status === 'COMPLETED' || transaction.status === 'FAILED') {
-      logger.debug({ transactionId, status: transaction.status }, 'Transaction already in terminal state');
-      return;
-    }
-
-    if (pollResult.status === 'completed') {
-      transaction.complete();
-      await this.txRepo.update(transaction);
-
-      // Credit wallet
-      const wallet = await this.walletRepo.findById(transaction.walletId);
-      if (wallet) {
-        wallet.credit(transaction.amountUsdc);
-        await this.walletRepo.update(wallet);
-      }
-
-      logger.info({ transactionId }, 'Deposit completed via polling fallback');
-    } else if (pollResult.status === 'failed') {
-      transaction.fail('Payment failed or rejected');
-      await this.txRepo.update(transaction);
-      logger.info({ transactionId }, 'Deposit failed via polling fallback');
-    }
   }
 
   private toResult(

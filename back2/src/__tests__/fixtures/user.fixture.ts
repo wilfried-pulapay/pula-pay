@@ -5,13 +5,11 @@ export const createUserProps = (overrides: Partial<UserProps> = {}): UserProps =
   id: 'user-test-id-001',
   phone: '+22501234567',
   email: 'test@example.com',
-  passwordHash: '$2a$10$hashedpassword',
+  name: null,
   kycLevel: 'BASIC' as KycLevel,
   kycData: null,
   displayCurrency: 'EUR' as Currency,
   locale: 'fr-FR',
-  otpHash: null,
-  otpExpiresAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   ...overrides,
@@ -59,26 +57,6 @@ export const userFixtures = {
         documentNumber: 'ID123456',
         addressProof: 'utility_bill.pdf',
       },
-    }),
-
-  // User with pending OTP
-  withPendingOtp: (): User =>
-    createUser({
-      id: 'user-pending-otp',
-      phone: '+22500000005',
-      kycLevel: 'NONE',
-      otpHash: '$2a$10$otphash',
-      otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes from now
-    }),
-
-  // User with expired OTP
-  withExpiredOtp: (): User =>
-    createUser({
-      id: 'user-expired-otp',
-      phone: '+22500000006',
-      kycLevel: 'NONE',
-      otpHash: '$2a$10$otphash',
-      otpExpiresAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
     }),
 
   // User with XOF currency preference

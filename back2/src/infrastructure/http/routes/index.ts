@@ -1,11 +1,11 @@
-import { Router } from 'express';
+import { Router, Express } from 'express';
 import { PrismaClient } from '@prisma/client';
 
-// Middleware
-import { authMiddleware } from '../middleware/auth';
+// Better Auth
+import { authHandler } from '../../auth/auth.routes';
+import { authMiddleware } from '../../auth/auth.middleware';
 
 // Controllers
-import { AuthController } from '../controllers/AuthController';
 import { WalletController } from '../controllers/WalletController';
 import { WebhookController } from '../controllers/WebhookController';
 import { ExchangeRateController } from '../controllers/ExchangeRateController';
@@ -41,6 +41,14 @@ import { CoinbaseCdpOnRampAdapter } from '../../adapters/coinbase-cdp/CoinbaseCd
 import { CoingeckoAdapter } from '../../adapters/exchange/CoingeckoAdapter';
 import { CachedExchangeRateAdapter } from '../../adapters/exchange/CachedExchangeRateAdapter';
 
+// BullMQ queues
+import { coinbasePollingQueue, txExpiryQueue } from '../../jobs/queues';
+
+export function mountAuthRoutes(app: Express): void {
+  // Better Auth — handles all /api/auth/* routes
+  app.all('/api/auth/*', authHandler);
+}
+
 export function createRouter(prisma: PrismaClient): Router {
   const router = Router();
 
@@ -53,13 +61,13 @@ export function createRouter(prisma: PrismaClient): Router {
   const circleAdapter = new CircleWalletAdapter();
   const coinbaseCdpAdapter = new CoinbaseCdpOnRampAdapter();
   const coingeckoAdapter = new CoingeckoAdapter();
-  const exchangeRateAdapter = new CachedExchangeRateAdapter(coingeckoAdapter, prisma);
+  const exchangeRateAdapter = new CachedExchangeRateAdapter(coingeckoAdapter);
 
   // Initialize handlers
   const createWalletHandler = new CreateWalletHandler(userRepo, walletRepo, circleAdapter);
-  const depositHandler = new InitiateDepositHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter);
-  const withdrawHandler = new InitiateWithdrawalHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter);
-  const transferHandler = new ExecuteTransferHandler( prisma, walletRepo, txRepo, circleAdapter, exchangeRateAdapter);
+  const depositHandler = new InitiateDepositHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter, coinbasePollingQueue, txExpiryQueue);
+  const withdrawHandler = new InitiateWithdrawalHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter, coinbasePollingQueue, txExpiryQueue);
+  const transferHandler = new ExecuteTransferHandler(prisma, walletRepo, txRepo, circleAdapter, exchangeRateAdapter);
   const simpleTransferHandler = new ExecuteSimpleTransferHandler(prisma, walletRepo, txRepo, exchangeRateAdapter);
   const confirmDepositHandler = new ConfirmDepositHandler(prisma, txRepo, walletRepo);
   const activateWalletHandler = new ActivateWalletHandler(walletRepo);
@@ -75,9 +83,8 @@ export function createRouter(prisma: PrismaClient): Router {
   const conversionService = new CurrencyConversionService(exchangeRateAdapter);
 
   // Initialize controllers
-  const authController = new AuthController(userRepo);
   const walletController = new WalletController(createWalletHandler, depositHandler, withdrawHandler, transferHandler, simpleTransferHandler, syncWalletStatusHandler, balanceHandler, historyHandler, transactionByIdHandler, addressHandler, resolveRecipientHandler, onrampQuoteHandler, offrampQuoteHandler);
-  const webhookController = new WebhookController(confirmDepositHandler, activateWalletHandler, coinbaseCdpAdapter);
+  const webhookController = new WebhookController(confirmDepositHandler, activateWalletHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue);
   const rateController = new ExchangeRateController(rateHandler, conversionService);
   const healthController = new HealthController(prisma);
 
@@ -85,17 +92,6 @@ export function createRouter(prisma: PrismaClient): Router {
   router.get('/health', healthController.getHealth);
   router.get('/ready', healthController.getReady);
   router.get('/live', healthController.getLive);
-
-  // Auth routes (public)
-  router.post('/auth/register', authController.register);
-  router.post('/auth/login', authController.login);
-  router.post('/auth/request-otp', authController.requestOtp);
-  router.post('/auth/verify-otp', authController.verifyOtp);
-  router.post('/auth/refresh', authController.refreshToken);
-
-  // Auth routes (protected)
-  router.get('/auth/me', authMiddleware, authController.me);
-  router.patch('/auth/me', authMiddleware, authController.updateProfile);
 
   // Public routes
   router.get('/exchange-rates', rateController.getRates);

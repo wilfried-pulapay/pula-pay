@@ -12,24 +12,36 @@ import {
 } from '../../../__tests__/mocks/adapters.mock';
 import { walletFixtures, transactionFixtures } from '../../../__tests__/fixtures';
 
+const createMockQueue = () => ({
+  add: jest.fn().mockResolvedValue(undefined),
+  remove: jest.fn().mockResolvedValue(undefined),
+  getJob: jest.fn().mockResolvedValue(null),
+});
+
 describe('InitiateDepositHandler', () => {
   let handler: InitiateDepositHandler;
   let mockWalletRepo: ReturnType<typeof createMockWalletRepository>;
   let mockTxRepo: ReturnType<typeof createMockTransactionRepository>;
   let mockOnRampProvider: ReturnType<typeof createMockOnRampProvider>;
   let mockExchangeRateProvider: ReturnType<typeof createMockExchangeRateProvider>;
+  let mockPollingQueue: ReturnType<typeof createMockQueue>;
+  let mockExpiryQueue: ReturnType<typeof createMockQueue>;
 
   beforeEach(() => {
     mockWalletRepo = createMockWalletRepository();
     mockTxRepo = createMockTransactionRepository();
     mockOnRampProvider = createMockOnRampProvider();
     mockExchangeRateProvider = createMockExchangeRateProvider();
+    mockPollingQueue = createMockQueue();
+    mockExpiryQueue = createMockQueue();
 
     handler = new InitiateDepositHandler(
       mockWalletRepo,
       mockTxRepo,
       mockOnRampProvider,
-      mockExchangeRateProvider
+      mockExchangeRateProvider,
+      mockPollingQueue as any,
+      mockExpiryQueue as any,
     );
   });
 
@@ -57,7 +69,7 @@ describe('InitiateDepositHandler', () => {
       });
       mockTxRepo.create.mockResolvedValue(transactionFixtures.pendingDeposit());
       mockOnRampProvider.initiateDeposit.mockResolvedValue({
-        providerRef: 'momo-ref-123',
+        providerRef: 'cdp-ref-123',
         status: 'pending',
       });
       mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);
@@ -68,9 +80,38 @@ describe('InitiateDepositHandler', () => {
 
       // Assert
       expect(result.transactionId).toBeDefined();
-      expect(result.providerRef).toBe('momo-ref-123');
+      expect(result.providerRef).toBe('cdp-ref-123');
       expect(result.status).toBe('PROCESSING');
       expect(result.displayCurrency).toBe('XOF');
+    });
+
+    it('should enqueue BullMQ polling and expiry jobs', async () => {
+      // Arrange
+      const wallet = walletFixtures.activeWithBalance();
+
+      mockTxRepo.findByIdempotencyKey.mockResolvedValue(null);
+      mockWalletRepo.findByUserId.mockResolvedValue(wallet);
+      mockExchangeRateProvider.getRate.mockResolvedValue({
+        baseCurrency: 'USDC',
+        quoteCurrency: 'XOF',
+        rate: new Decimal('603.45'),
+        timestamp: new Date(),
+        source: 'coingecko',
+      });
+      mockTxRepo.create.mockResolvedValue(transactionFixtures.pendingDeposit());
+      mockOnRampProvider.initiateDeposit.mockResolvedValue({
+        providerRef: 'cdp-ref-123',
+        status: 'pending',
+      });
+      mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);
+      mockTxRepo.update.mockResolvedValue(transactionFixtures.processingDeposit());
+
+      // Act
+      await handler.execute(baseCommand);
+
+      // Assert
+      expect(mockPollingQueue.add).toHaveBeenCalledTimes(1);
+      expect(mockExpiryQueue.add).toHaveBeenCalledTimes(1);
     });
 
     it('should convert fiat amount to USDC using exchange rate', async () => {
@@ -88,7 +129,7 @@ describe('InitiateDepositHandler', () => {
       });
       mockTxRepo.create.mockResolvedValue(transactionFixtures.pendingDeposit());
       mockOnRampProvider.initiateDeposit.mockResolvedValue({
-        providerRef: 'momo-ref-123',
+        providerRef: 'cdp-ref-123',
         status: 'pending',
       });
       mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);
@@ -168,7 +209,7 @@ describe('InitiateDepositHandler', () => {
       });
       mockTxRepo.create.mockResolvedValue(transactionFixtures.pendingDeposit());
       mockOnRampProvider.initiateDeposit.mockResolvedValue({
-        providerRef: 'momo-ref-123',
+        providerRef: 'cdp-ref-123',
         status: 'pending',
       });
       mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);
@@ -203,7 +244,7 @@ describe('InitiateDepositHandler', () => {
       });
       mockTxRepo.create.mockResolvedValue(pendingTx);
       mockOnRampProvider.initiateDeposit.mockResolvedValue({
-        providerRef: 'momo-ref-xyz',
+        providerRef: 'cdp-ref-xyz',
         status: 'pending',
       });
       mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);
@@ -216,13 +257,13 @@ describe('InitiateDepositHandler', () => {
       expect(mockTxRepo.createOnRampDetails).toHaveBeenCalledWith(
         expect.objectContaining({
           transactionId: pendingTx.id,
-          providerRef: 'momo-ref-xyz',
+          providerRef: 'cdp-ref-xyz',
           fiatCurrency: 'XOF',
         })
       );
     });
 
-    it('should update transaction to PROCESSING after MoMo call', async () => {
+    it('should update transaction to PROCESSING after Coinbase CDP call', async () => {
       // Arrange
       const wallet = walletFixtures.activeWithBalance();
       const pendingTx = transactionFixtures.pendingDeposit();
@@ -238,7 +279,7 @@ describe('InitiateDepositHandler', () => {
       });
       mockTxRepo.create.mockResolvedValue(pendingTx);
       mockOnRampProvider.initiateDeposit.mockResolvedValue({
-        providerRef: 'momo-ref-123',
+        providerRef: 'cdp-ref-123',
         status: 'pending',
       });
       mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);
@@ -249,7 +290,6 @@ describe('InitiateDepositHandler', () => {
 
       // Assert
       expect(mockTxRepo.update).toHaveBeenCalled();
-      // The transaction should have been marked processing
     });
 
     it('should handle EUR currency', async () => {
@@ -274,7 +314,7 @@ describe('InitiateDepositHandler', () => {
       });
       mockTxRepo.create.mockResolvedValue(transactionFixtures.eurTransaction());
       mockOnRampProvider.initiateDeposit.mockResolvedValue({
-        providerRef: 'momo-ref-123',
+        providerRef: 'cdp-ref-123',
         status: 'pending',
       });
       mockTxRepo.createOnRampDetails.mockResolvedValue(undefined);

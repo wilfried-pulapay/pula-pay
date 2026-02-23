@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ApiResponse } from '../../../shared/types';
+import { cache } from '../../cache/redis-cache';
 
 interface HealthStatus {
   status: 'healthy' | 'unhealthy';
@@ -8,6 +9,7 @@ interface HealthStatus {
   uptime: number;
   checks: {
     database: 'ok' | 'error';
+    redis: 'ok' | 'error';
   };
 }
 
@@ -21,6 +23,7 @@ export class HealthController {
     res: Response<ApiResponse<HealthStatus>>
   ): Promise<void> => {
     let dbStatus: 'ok' | 'error' = 'error';
+    let redisStatus: 'ok' | 'error' = 'error';
 
     try {
       await this.prisma.$queryRaw`SELECT 1`;
@@ -29,7 +32,13 @@ export class HealthController {
       dbStatus = 'error';
     }
 
-    const isHealthy = dbStatus === 'ok';
+    try {
+      redisStatus = (await cache.isHealthy()) ? 'ok' : 'error';
+    } catch {
+      redisStatus = 'error';
+    }
+
+    const isHealthy = dbStatus === 'ok' && redisStatus === 'ok';
 
     res.status(isHealthy ? 200 : 503).json({
       success: isHealthy,
@@ -39,6 +48,7 @@ export class HealthController {
         uptime: Math.floor((Date.now() - this.startTime) / 1000),
         checks: {
           database: dbStatus,
+          redis: redisStatus,
         },
       },
       meta: {
@@ -49,7 +59,6 @@ export class HealthController {
   };
 
   getReady = async (req: Request, res: Response<ApiResponse>): Promise<void> => {
-    // Readiness check - can accept traffic
     res.json({
       success: true,
       data: { ready: true },
@@ -61,7 +70,6 @@ export class HealthController {
   };
 
   getLive = async (req: Request, res: Response<ApiResponse>): Promise<void> => {
-    // Liveness check - process is alive
     res.json({
       success: true,
       data: { alive: true },

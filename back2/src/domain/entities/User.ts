@@ -2,21 +2,20 @@ import { KycLevel, Currency } from '@prisma/client';
 
 export interface UserProps {
   id: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
-  passwordHash: string;
+  name: string | null;
   kycLevel: KycLevel;
   kycData: Record<string, unknown> | null;
   displayCurrency: Currency;
   locale: string;
-  otpHash: string | null;
-  otpExpiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
  * User entity with KYC and preferences
+ * Auth is handled by Better Auth — no password/OTP fields here
  */
 export class User {
   constructor(private props: UserProps) {}
@@ -25,14 +24,14 @@ export class User {
   get id(): string {
     return this.props.id;
   }
-  get phone(): string {
+  get phone(): string | null {
     return this.props.phone;
   }
   get email(): string | null {
     return this.props.email;
   }
-  get passwordHash(): string {
-    return this.props.passwordHash;
+  get name(): string | null {
+    return this.props.name;
   }
   get kycLevel(): KycLevel {
     return this.props.kycLevel;
@@ -45,12 +44,6 @@ export class User {
   }
   get locale(): string {
     return this.props.locale;
-  }
-  get otpHash(): string | null {
-    return this.props.otpHash;
-  }
-  get otpExpiresAt(): Date | null {
-    return this.props.otpExpiresAt;
   }
   get createdAt(): Date {
     return this.props.createdAt;
@@ -78,11 +71,11 @@ export class User {
       case 'NONE':
         return 0;
       case 'BASIC':
-        return 100; // 100 USDC
+        return 100;
       case 'VERIFIED':
-        return 1000; // 1000 USDC
+        return 1000;
       case 'ENHANCED':
-        return 10000; // 10000 USDC
+        return 10000;
       default:
         return 0;
     }
@@ -90,26 +83,6 @@ export class User {
 
   getMonthlyLimit(): number {
     return this.getDailyLimit() * 30;
-  }
-
-  // OTP management
-  setOtp(hash: string, expiresAt: Date): void {
-    this.props.otpHash = hash;
-    this.props.otpExpiresAt = expiresAt;
-    this.props.updatedAt = new Date();
-  }
-
-  clearOtp(): void {
-    this.props.otpHash = null;
-    this.props.otpExpiresAt = null;
-    this.props.updatedAt = new Date();
-  }
-
-  isOtpValid(): boolean {
-    if (!this.props.otpHash || !this.props.otpExpiresAt) {
-      return false;
-    }
-    return new Date() < this.props.otpExpiresAt;
   }
 
   // Preferences
@@ -150,6 +123,7 @@ export class User {
       id: this.props.id,
       phone: this.props.phone,
       email: this.props.email,
+      name: this.props.name,
       kycLevel: this.props.kycLevel,
       displayCurrency: this.props.displayCurrency,
       locale: this.props.locale,

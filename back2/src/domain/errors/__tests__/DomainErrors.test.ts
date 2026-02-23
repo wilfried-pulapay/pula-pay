@@ -2,7 +2,7 @@ import Decimal from 'decimal.js';
 import { DomainError } from '../DomainError';
 import { InsufficientFundsError } from '../InsufficientFundsError';
 import { WalletFrozenError } from '../WalletFrozenError';
-import { InvalidTransactionStateError } from '../InvalidTransactionStateError';
+import { InvalidStateTransitionError } from '../InvalidStateTransitionError';
 import { LedgerImbalanceError } from '../LedgerImbalanceError';
 import { UserNotFoundError } from '../UserNotFoundError';
 import { WalletNotFoundError } from '../WalletNotFoundError';
@@ -118,34 +118,31 @@ describe('Domain Errors', () => {
     });
   });
 
-  describe('InvalidTransactionStateError', () => {
+  describe('InvalidStateTransitionError', () => {
     it('should create error with state transition info', () => {
-      const error = new InvalidTransactionStateError('tx-789', 'COMPLETED', 'PROCESSING');
+      const error = new InvalidStateTransitionError('COMPLETED', 'PROCESS');
 
-      expect(error.code).toBe('INVALID_TRANSACTION_STATE');
-      expect(error.transactionId).toBe('tx-789');
-      expect(error.currentStatus).toBe('COMPLETED');
-      expect(error.attemptedStatus).toBe('PROCESSING');
+      expect(error.code).toBe('INVALID_STATE_TRANSITION');
+      expect(error.currentState).toBe('COMPLETED');
+      expect(error.attemptedEvent).toBe('PROCESS');
     });
 
     it('should have descriptive message', () => {
-      const error = new InvalidTransactionStateError('tx-789', 'COMPLETED', 'PROCESSING');
+      const error = new InvalidStateTransitionError('COMPLETED', 'PROCESS');
 
-      expect(error.message).toContain('tx-789');
       expect(error.message).toContain('COMPLETED');
-      expect(error.message).toContain('PROCESSING');
-      expect(error.message).toContain('Cannot transition');
+      expect(error.message).toContain('PROCESS');
+      expect(error.message).toContain('Cannot apply event');
     });
 
     it('should serialize to JSON', () => {
-      const error = new InvalidTransactionStateError('tx-789', 'PENDING', 'COMPLETED');
+      const error = new InvalidStateTransitionError('PENDING', 'COMPLETE');
       const json = error.toJSON();
 
-      expect(json).toHaveProperty('name', 'InvalidTransactionStateError');
-      expect(json).toHaveProperty('code', 'INVALID_TRANSACTION_STATE');
-      expect(json).toHaveProperty('transactionId', 'tx-789');
-      expect(json).toHaveProperty('currentStatus', 'PENDING');
-      expect(json).toHaveProperty('attemptedStatus', 'COMPLETED');
+      expect(json).toHaveProperty('name', 'InvalidStateTransitionError');
+      expect(json).toHaveProperty('code', 'INVALID_STATE_TRANSITION');
+      expect(json).toHaveProperty('currentState', 'PENDING');
+      expect(json).toHaveProperty('attemptedEvent', 'COMPLETE');
     });
   });
 

@@ -1,51 +1,33 @@
 services:
   db:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: momo_demo
-    ports:
-      - "5432:5432"
-    volumes:
-      - dbdata_momo:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      retries: 5
-
-  db2:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: pula_pay_db
+    image: postgres:16-alpine
     ports:
       - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pulapay_v2
     volumes:
-      - dbdata_pulapay:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      retries: 5
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  back:
-    build: ./back
+  redis:
+    image: redis:7-alpine
     ports:
-      - "3000:3000"
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/momo_demo?schema=public
-
-  front:
-    build: ./front
-    ports:
-      - "8080:80"
-    depends_on:
-      - back
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
-  dbdata_momo:
-  dbdata_pulapay:
+  postgres_data:
+  redis_data:

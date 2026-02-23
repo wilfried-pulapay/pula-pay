@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { Queue } from 'bullmq';
 import { Currency } from '@prisma/client';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
@@ -9,11 +10,12 @@ import { WalletNotFoundError } from '../../domain/errors/WalletNotFoundError';
 import { generateIdempotencyKey } from '../../shared/utils/idempotency';
 import { config } from '../../shared/config';
 import { logger } from '../../shared/utils/logger';
+import type { CoinbasePollingJobData } from '../../infrastructure/jobs/workers/coinbase-poll.worker';
 
 export interface InitiateWithdrawalCommand {
   userId: string;
-  fiatAmount: number;  // Amount in fiat currency
-  fiatCurrency: Currency;  // Target fiat currency (e.g., USD, EUR)
+  fiatAmount: number;
+  fiatCurrency: Currency;
   idempotencyKey?: string;
   country?: string;
   paymentMethod?: string;
@@ -39,7 +41,9 @@ export class InitiateWithdrawalHandler {
     private readonly walletRepo: WalletRepository,
     private readonly txRepo: TransactionRepository,
     private readonly onRampProvider: OnRampProvider,
-    private readonly exchangeRateProvider: ExchangeRateProvider
+    private readonly exchangeRateProvider: ExchangeRateProvider,
+    private readonly coinbasePollingQueue: Queue<CoinbasePollingJobData>,
+    private readonly txExpiryQueue: Queue,
   ) {}
 
   async execute(command: InitiateWithdrawalCommand): Promise<InitiateWithdrawalResult> {
@@ -95,7 +99,7 @@ export class InitiateWithdrawalHandler {
       cashoutCurrency: command.fiatCurrency,
     });
 
-    // 8. Create OnRampTransaction (used for off-ramp too)
+    // 8. Create OnRampTransaction
     await this.txRepo.createOnRampDetails({
       transactionId: transaction.id,
       provider: this.onRampProvider.providerCode,
@@ -121,53 +125,32 @@ export class InitiateWithdrawalHandler {
       'Withdrawal initiated'
     );
 
-    // 10. Start background polling as fallback for callbacks
-    if (this.onRampProvider.startPayoutPolling) {
-      this.onRampProvider.startPayoutPolling(
-        compositeRef,
-        async (pollResult) => {
-          await this.handlePollingResult(transaction.id, pollResult);
-        }
-      );
-    }
+    // 10. Enqueue BullMQ polling job
+    await this.coinbasePollingQueue.add(
+      `poll-withdrawal-${transaction.id}`,
+      {
+        transactionId: transaction.id,
+        partnerUserRef: compositeRef,
+        type: 'OFFRAMP' as const,
+        idempotencyKey,
+      },
+      {
+        delay: 15_000,
+        jobId: `withdraw-${idempotencyKey}`,
+      },
+    );
+
+    // 11. Schedule expiry (10 min timeout)
+    await this.txExpiryQueue.add(
+      `expire-${transaction.id}`,
+      { transactionId: transaction.id },
+      {
+        delay: 600_000,
+        jobId: `expire-${idempotencyKey}`,
+      },
+    );
 
     return this.toResult(transaction, payoutResult.providerRef, payoutResult.paymentUrl, payoutResult.fees);
-  }
-
-  private async handlePollingResult(
-    transactionId: string,
-    pollResult: { status: 'pending' | 'processing' | 'completed' | 'failed' }
-  ): Promise<void> {
-    const transaction = await this.txRepo.findById(transactionId);
-    if (!transaction) {
-      logger.warn({ transactionId }, 'Transaction not found during polling callback');
-      return;
-    }
-
-    // Skip if already in terminal state
-    if (transaction.status === 'COMPLETED' || transaction.status === 'FAILED') {
-      logger.debug({ transactionId, status: transaction.status }, 'Transaction already in terminal state');
-      return;
-    }
-
-    if (pollResult.status === 'completed') {
-      transaction.complete();
-      await this.txRepo.update(transaction);
-
-      // Debit wallet (amount + fee)
-      const wallet = await this.walletRepo.findById(transaction.walletId);
-      if (wallet) {
-        const totalDebit = transaction.amountUsdc.add(transaction.feeUsdc);
-        wallet.debit(totalDebit);
-        await this.walletRepo.update(wallet);
-      }
-
-      logger.info({ transactionId }, 'Withdrawal completed via polling fallback');
-    } else if (pollResult.status === 'failed') {
-      transaction.fail('Payout failed or rejected');
-      await this.txRepo.update(transaction);
-      logger.info({ transactionId }, 'Withdrawal failed via polling fallback');
-    }
   }
 
   private toResult(

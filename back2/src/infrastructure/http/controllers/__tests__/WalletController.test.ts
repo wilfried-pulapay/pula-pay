@@ -39,7 +39,7 @@ describe('WalletController', () => {
     );
 
     mockReq = {
-      userId: 'user-123',
+      user: { id: 'user-123', phone: '+22501234567', kycLevel: 'BASIC', displayCurrency: 'EUR' },
       body: {},
       query: {},
       headers: { 'x-request-id': 'req-123' },

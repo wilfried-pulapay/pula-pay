@@ -5,6 +5,7 @@ import {
   CreateWalletParams,
   WalletCreationResult,
   WalletBalance,
+  WalletDetails,
   TransferParams,
   TransferResult,
   EstimateFeeParams,
@@ -26,6 +27,7 @@ import {
  */
 export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
   createWallet: jest.fn(),
+  getWallet: jest.fn(),
   getBalance: jest.fn(),
   transfer: jest.fn(),
   getTransferStatus: jest.fn(),
@@ -33,10 +35,10 @@ export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
 });
 
 /**
- * Mock OnRamp Provider (MoMo)
+ * Mock OnRamp Provider (Coinbase CDP)
  */
 export const createMockOnRampProvider = (): jest.Mocked<OnRampProvider> => ({
-  providerCode: 'MTN_MOMO' as Provider,
+  providerCode: 'COINBASE_CDP' as Provider,
   initiateDeposit: jest.fn(),
   getDepositStatus: jest.fn(),
   initiatePayout: jest.fn(),
@@ -60,7 +62,7 @@ export class InMemoryWalletProvider implements WalletProvider {
   private transfers: Map<string, TransferResult> = new Map();
   private idCounter = 1;
 
-  async createWallet(params: CreateWalletParams): Promise<WalletCreationResult> {
+  async createWallet(_params: CreateWalletParams): Promise<WalletCreationResult> {
     const circleWalletId = `circle-wallet-${this.idCounter++}`;
     const address = `0x${this.idCounter.toString(16).padStart(40, '0')}`;
 
@@ -71,6 +73,19 @@ export class InMemoryWalletProvider implements WalletProvider {
       walletSetId: 'wallet-set-test',
       address,
       status: 'active',
+    };
+  }
+
+  async getWallet(circleWalletId: string): Promise<WalletDetails> {
+    const wallet = this.wallets.get(circleWalletId);
+    return {
+      id: circleWalletId,
+      address: wallet?.address ?? '0x0',
+      blockchain: 'MATIC-AMOY',
+      state: 'LIVE',
+      walletSetId: 'wallet-set-test',
+      custodyType: 'DEVELOPER',
+      accountType: 'SCA',
     };
   }
 
@@ -137,13 +152,13 @@ export class InMemoryWalletProvider implements WalletProvider {
  * In-memory OnRamp Provider for integration tests
  */
 export class InMemoryOnRampProvider implements OnRampProvider {
-  readonly providerCode: Provider = 'MTN_MOMO';
+  readonly providerCode: Provider = 'COINBASE_CDP';
   private deposits: Map<string, DepositResult> = new Map();
   private payouts: Map<string, PayoutResult> = new Map();
   private idCounter = 1;
 
-  async initiateDeposit(params: InitiateDepositParams): Promise<DepositResult> {
-    const providerRef = `momo-dep-${this.idCounter++}`;
+  async initiateDeposit(_params: InitiateDepositParams): Promise<DepositResult> {
+    const providerRef = `cdp-dep-${this.idCounter++}`;
     const result: DepositResult = {
       providerRef,
       status: 'pending',
@@ -161,8 +176,8 @@ export class InMemoryOnRampProvider implements OnRampProvider {
     );
   }
 
-  async initiatePayout(params: InitiatePayoutParams): Promise<PayoutResult> {
-    const providerRef = `momo-pay-${this.idCounter++}`;
+  async initiatePayout(_params: InitiatePayoutParams): Promise<PayoutResult> {
+    const providerRef = `cdp-pay-${this.idCounter++}`;
     const result: PayoutResult = {
       providerRef,
       status: 'pending',

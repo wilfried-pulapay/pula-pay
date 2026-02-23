@@ -3,14 +3,23 @@ import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 import swaggerUi from 'swagger-ui-express';
 
 import { config } from './shared/config';
 import { logger } from './shared/utils/logger';
 import { prisma, connectDatabase, disconnectDatabase } from './infrastructure/persistence/prisma/client';
-import { createRouter } from './infrastructure/http/routes';
+import { mountAuthRoutes, createRouter } from './infrastructure/http/routes';
 import { requestLogger, errorHandler } from './infrastructure/http/middleware';
 import { swaggerSpec } from './infrastructure/http/swagger';
+import { bootstrapWorkers } from './infrastructure/jobs';
+import { redis } from './infrastructure/cache/redis-cache';
+
+// Adapters for worker dependencies
+import { CoinbaseCdpOnRampAdapter } from './infrastructure/adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
+import { ConfirmDepositHandler } from './application/commands/ConfirmDepositHandler';
+import { PrismaTransactionRepository } from './infrastructure/persistence/repositories/PrismaTransactionRepository';
+import { PrismaWalletRepository } from './infrastructure/persistence/repositories/PrismaWalletRepository';
 
 async function bootstrap(): Promise<void> {
   const app = express();
@@ -25,13 +34,17 @@ async function bootstrap(): Promise<void> {
     })
   );
 
-  // Rate limiting
+  // Rate limiting (Redis-backed for multi-instance support)
   app.use(
     rateLimit({
       windowMs: config.rateLimit.windowMs,
       max: config.rateLimit.maxRequests,
       standardHeaders: true,
       legacyHeaders: false,
+      store: new RedisStore({
+        sendCommand: (...args: string[]) =>
+          redis.call(args[0], ...args.slice(1)) as any,
+      }),
       message: {
         success: false,
         error: {
@@ -65,6 +78,9 @@ async function bootstrap(): Promise<void> {
     res.send(swaggerSpec);
   });
 
+  // Better Auth routes (must be before body parser issues)
+  mountAuthRoutes(app);
+
   // API routes
   app.use('/api/v2', createRouter(prisma));
 
@@ -81,6 +97,18 @@ async function bootstrap(): Promise<void> {
 
   // Error handler
   app.use(errorHandler);
+
+  // Bootstrap BullMQ workers
+  const coinbaseCdpAdapter = new CoinbaseCdpOnRampAdapter();
+  const txRepo = new PrismaTransactionRepository(prisma);
+  const walletRepo = new PrismaWalletRepository(prisma);
+  const confirmDepositHandler = new ConfirmDepositHandler(prisma, txRepo, walletRepo);
+
+  const workers = bootstrapWorkers({
+    coinbaseCdpAdapter,
+    confirmDepositHandler,
+    transactionRepo: txRepo,
+  });
 
   // Start server
   const server = app.listen(config.port, () => {
@@ -99,7 +127,9 @@ async function bootstrap(): Promise<void> {
 
     server.close(async () => {
       logger.info('HTTP server closed');
+      await workers.shutdown();
       await disconnectDatabase();
+      redis.disconnect();
       process.exit(0);
     });
 

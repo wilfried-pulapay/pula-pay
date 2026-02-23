@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { Queue } from 'bullmq';
 import { ApiResponse } from '../../../shared/types';
 import { ConfirmDepositHandler } from '../../../application/commands/ConfirmDepositHandler';
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
@@ -39,7 +40,9 @@ export class WebhookController {
   constructor(
     private readonly confirmDepositHandler: ConfirmDepositHandler,
     private readonly activateWalletHandler: ActivateWalletHandler,
-    private readonly coinbaseCdpProvider: OnRampProvider
+    private readonly coinbaseCdpProvider: OnRampProvider,
+    private readonly coinbasePollingQueue: Queue,
+    private readonly txExpiryQueue: Queue,
   ) {}
 
   handleCoinbaseCdpWebhook = async (
@@ -88,6 +91,9 @@ export class WebhookController {
             ...payload.metadata,
           },
         });
+
+        // Cancel polling + expiry jobs (no longer needed)
+        await this.cancelRelatedJobs(payload.transaction_id);
       }
 
       // Always acknowledge receipt
@@ -100,7 +106,6 @@ export class WebhookController {
       });
     } catch (error) {
       logger.error({ error }, 'Error processing Coinbase CDP webhook');
-      // Still return 200 to prevent retries for unrecoverable errors
       res.status(200).json({
         success: true,
         meta: {
@@ -128,15 +133,12 @@ export class WebhookController {
         'Circle webhook received'
       );
 
-      // Handle different notification types
       switch (payload.notificationType) {
         case 'transactions.outbound':
         case 'transactions.inbound':
-          // Handle transaction state changes
           break;
 
         case 'wallets':
-          // Handle wallet state changes
           await this.handleWalletStateChange(payload);
           break;
 
@@ -166,6 +168,22 @@ export class WebhookController {
     }
   };
 
+  private async cancelRelatedJobs(partnerUserRef: string): Promise<void> {
+    try {
+      const pollingJobs = await this.coinbasePollingQueue.getJobs(['waiting', 'delayed']);
+      const match = pollingJobs.find((j) => j.data?.partnerUserRef === partnerUserRef);
+      if (match) {
+        await match.remove();
+
+        const expiryJobs = await this.txExpiryQueue.getJobs(['waiting', 'delayed']);
+        const expiryMatch = expiryJobs.find((j) => j.data?.transactionId === match.data?.transactionId);
+        if (expiryMatch) await expiryMatch.remove();
+      }
+    } catch (err) {
+      logger.warn({ msg: 'Failed to cancel jobs after webhook', err });
+    }
+  }
+
   private async handleWalletStateChange(payload: CircleWebhookPayload): Promise<void> {
     const { walletId, state } = payload.notification;
 
@@ -174,7 +192,6 @@ export class WebhookController {
       'Processing wallet state change'
     );
 
-    // Only activate if state is LIVE
     if (state === 'LIVE') {
       try {
         await this.activateWalletHandler.execute({

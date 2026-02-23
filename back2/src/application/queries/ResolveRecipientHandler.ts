@@ -47,7 +47,7 @@ export class ResolveRecipientHandler {
       return {
         userId: user.id,
         address: wallet.address,
-        phone: user.phone,
+        phone: user.phone ?? undefined,
       };
     }
 
@@ -63,7 +63,7 @@ export class ResolveRecipientHandler {
       return {
         userId: wallet.userId,
         address: wallet.address,
-        phone: user?.phone,
+        phone: user?.phone ?? undefined,
       };
     }
 

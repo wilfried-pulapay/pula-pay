@@ -1,0 +1,62 @@
+import { Request, Response, NextFunction } from 'express';
+import { auth } from './auth.config';
+import { ApiResponse } from '../../shared/types';
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        phone?: string;
+        kycLevel?: string;
+        displayCurrency?: string;
+      };
+    }
+  }
+}
+
+export async function authMiddleware(
+  req: Request,
+  res: Response<ApiResponse>,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers as any });
+
+    if (!session) {
+      res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Invalid or expired session',
+        },
+        meta: {
+          requestId: req.headers['x-request-id'] as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+
+    req.user = {
+      id: session.user.id,
+      phone: (session.user as any).phone,
+      kycLevel: (session.user as any).kycLevel,
+      displayCurrency: (session.user as any).displayCurrency,
+    };
+
+    next();
+  } catch {
+    res.status(401).json({
+      success: false,
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Authentication failed',
+      },
+      meta: {
+        requestId: req.headers['x-request-id'] as string,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+}

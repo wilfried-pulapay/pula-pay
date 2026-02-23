@@ -10,7 +10,7 @@ describe('User Entity', () => {
       expect(user.id).toBe(props.id);
       expect(user.phone).toBe(props.phone);
       expect(user.email).toBe(props.email);
-      expect(user.passwordHash).toBe(props.passwordHash);
+      expect(user.name).toBe(props.name);
       expect(user.kycLevel).toBe(props.kycLevel);
       expect(user.displayCurrency).toBe(props.displayCurrency);
       expect(user.locale).toBe(props.locale);
@@ -23,10 +23,9 @@ describe('User Entity', () => {
       expect(user.email).toBeNull();
     });
 
-    it('should handle null OTP', () => {
-      const user = createUser({ otpHash: null, otpExpiresAt: null });
-      expect(user.otpHash).toBeNull();
-      expect(user.otpExpiresAt).toBeNull();
+    it('should handle null name', () => {
+      const user = createUser({ name: null });
+      expect(user.name).toBeNull();
     });
   });
 
@@ -101,53 +100,6 @@ describe('User Entity', () => {
     it('should calculate monthly limit as 30x daily limit', () => {
       const user = userFixtures.basicKyc();
       expect(user.getMonthlyLimit()).toBe(3000); // 100 * 30
-    });
-  });
-
-  describe('OTP management', () => {
-    it('should set OTP hash and expiry', () => {
-      const user = userFixtures.noKyc();
-      const otpHash = '$2a$10$newhash';
-      const expiresAt = new Date(Date.now() + 600000);
-
-      user.setOtp(otpHash, expiresAt);
-
-      expect(user.otpHash).toBe(otpHash);
-      expect(user.otpExpiresAt).toEqual(expiresAt);
-    });
-
-    it('should update updatedAt when setting OTP', () => {
-      const user = userFixtures.noKyc();
-      const oldUpdatedAt = user.updatedAt;
-
-      // Small delay to ensure different timestamp
-      user.setOtp('hash', new Date(Date.now() + 600000));
-
-      expect(user.updatedAt.getTime()).toBeGreaterThanOrEqual(oldUpdatedAt.getTime());
-    });
-
-    it('should clear OTP', () => {
-      const user = userFixtures.withPendingOtp();
-
-      user.clearOtp();
-
-      expect(user.otpHash).toBeNull();
-      expect(user.otpExpiresAt).toBeNull();
-    });
-
-    it('should return false for isOtpValid when no OTP set', () => {
-      const user = userFixtures.noKyc();
-      expect(user.isOtpValid()).toBe(false);
-    });
-
-    it('should return true for isOtpValid when OTP is not expired', () => {
-      const user = userFixtures.withPendingOtp();
-      expect(user.isOtpValid()).toBe(true);
-    });
-
-    it('should return false for isOtpValid when OTP is expired', () => {
-      const user = userFixtures.withExpiredOtp();
-      expect(user.isOtpValid()).toBe(false);
     });
   });
 
@@ -244,9 +196,6 @@ describe('User Entity', () => {
       expect(json).toHaveProperty('updatedAt');
 
       // Should NOT have sensitive data
-      expect(json).not.toHaveProperty('passwordHash');
-      expect(json).not.toHaveProperty('otpHash');
-      expect(json).not.toHaveProperty('otpExpiresAt');
       expect(json).not.toHaveProperty('kycData');
     });
 
@@ -263,9 +212,8 @@ describe('User Entity', () => {
       const persistence = user.toPersistence();
 
       expect(persistence).toHaveProperty('id');
-      expect(persistence).toHaveProperty('passwordHash');
-      expect(persistence).toHaveProperty('otpHash');
       expect(persistence).toHaveProperty('kycData');
+      expect(persistence).toHaveProperty('name');
     });
   });
 });

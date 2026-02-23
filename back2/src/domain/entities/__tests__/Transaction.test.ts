@@ -1,6 +1,6 @@
 import Decimal from 'decimal.js';
 import { Transaction } from '../Transaction';
-import { InvalidTransactionStateError } from '../../errors/InvalidTransactionStateError';
+import { InvalidStateTransitionError } from '../../errors/InvalidStateTransitionError';
 import {
   createTransaction,
   createTransactionProps,
@@ -173,10 +173,10 @@ describe('Transaction Entity', () => {
         expect(tx.externalRef).toBe('momo-ref-123');
       });
 
-      it('should throw InvalidTransactionStateError from COMPLETED', () => {
+      it('should throw InvalidStateTransitionError from COMPLETED', () => {
         const tx = transactionFixtures.completedDeposit();
 
-        expect(() => tx.markProcessing()).toThrow(InvalidTransactionStateError);
+        expect(() => tx.markProcessing()).toThrow(InvalidStateTransitionError);
       });
     });
 
@@ -199,10 +199,10 @@ describe('Transaction Entity', () => {
         expect(tx.completedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
       });
 
-      it('should throw InvalidTransactionStateError from PENDING', () => {
+      it('should throw InvalidStateTransitionError from PENDING', () => {
         const tx = transactionFixtures.pendingDeposit();
 
-        expect(() => tx.complete()).toThrow(InvalidTransactionStateError);
+        expect(() => tx.complete()).toThrow(InvalidStateTransitionError);
       });
     });
 
@@ -224,10 +224,10 @@ describe('Transaction Entity', () => {
         expect(tx.status).toBe('FAILED');
       });
 
-      it('should throw InvalidTransactionStateError from COMPLETED', () => {
+      it('should throw InvalidStateTransitionError from COMPLETED', () => {
         const tx = transactionFixtures.completedDeposit();
 
-        expect(() => tx.fail('Error')).toThrow(InvalidTransactionStateError);
+        expect(() => tx.fail('Error')).toThrow(InvalidStateTransitionError);
       });
     });
 
@@ -240,10 +240,10 @@ describe('Transaction Entity', () => {
         expect(tx.status).toBe('CANCELLED');
       });
 
-      it('should throw InvalidTransactionStateError from PROCESSING', () => {
+      it('should throw InvalidStateTransitionError from PROCESSING', () => {
         const tx = transactionFixtures.processingDeposit();
 
-        expect(() => tx.cancel()).toThrow(InvalidTransactionStateError);
+        expect(() => tx.cancel()).toThrow(InvalidStateTransitionError);
       });
     });
 
@@ -256,10 +256,10 @@ describe('Transaction Entity', () => {
         expect(tx.status).toBe('EXPIRED');
       });
 
-      it('should throw InvalidTransactionStateError from PROCESSING', () => {
+      it('should throw InvalidStateTransitionError from PROCESSING', () => {
         const tx = transactionFixtures.processingDeposit();
 
-        expect(() => tx.expire()).toThrow(InvalidTransactionStateError);
+        expect(() => tx.expire()).toThrow(InvalidStateTransitionError);
       });
     });
   });

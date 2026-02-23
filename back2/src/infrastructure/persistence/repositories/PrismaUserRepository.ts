@@ -25,7 +25,7 @@ export class PrismaUserRepository implements UserRepository {
       data: {
         phone: params.phone,
         email: params.email,
-        passwordHash: params.passwordHash,
+        name: params.name,
       },
     });
     return this.toDomain(user);
@@ -37,13 +37,11 @@ export class PrismaUserRepository implements UserRepository {
       where: { id: user.id },
       data: {
         email: props.email,
-        passwordHash: props.passwordHash,
+        name: props.name,
         kycLevel: props.kycLevel,
         kycData: (props.kycData as Prisma.InputJsonValue) ?? undefined,
         displayCurrency: props.displayCurrency,
         locale: props.locale,
-        otpHash: props.otpHash,
-        otpExpiresAt: props.otpExpiresAt,
       },
     });
     return this.toDomain(updated);
@@ -58,13 +56,11 @@ export class PrismaUserRepository implements UserRepository {
       id: prismaUser.id,
       phone: prismaUser.phone,
       email: prismaUser.email,
-      passwordHash: prismaUser.passwordHash,
+      name: prismaUser.name,
       kycLevel: prismaUser.kycLevel,
       kycData: prismaUser.kycData as Record<string, unknown> | null,
       displayCurrency: prismaUser.displayCurrency,
       locale: prismaUser.locale,
-      otpHash: prismaUser.otpHash,
-      otpExpiresAt: prismaUser.otpExpiresAt,
       createdAt: prismaUser.createdAt,
       updatedAt: prismaUser.updatedAt,
     };

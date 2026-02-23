@@ -102,7 +102,7 @@ export class InMemoryUserRepository implements UserRepository {
         id,
         phone: params.phone,
         email: params.email || null,
-        passwordHash: params.passwordHash,
+        name: params.name || null,
         kycLevel: 'NONE',
       })
     );
@@ -169,7 +169,7 @@ export class InMemoryWalletRepository implements WalletRepository {
     return null;
   }
 
-  async findByUserPhone(phone: string): Promise<Wallet | null> {
+  async findByUserPhone(_phone: string): Promise<Wallet | null> {
     // In real impl, this would join with users table
     // For in-memory, we'd need to inject user repo
     return null;

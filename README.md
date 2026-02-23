@@ -1,10 +1,10 @@
 # Pula Pay
 
-Universal African Money Account — a fintech platform enabling USDC wallet management, fiat on/off-ramp via mobile money, and peer-to-peer transfers across Africa.
+Universal African Money Account — a fintech platform enabling USDC wallet management, fiat on/off-ramp via Coinbase CDP, and peer-to-peer transfers across Africa.
 
 ## Overview
 
-Pula Pay lets users deposit money from MTN Mobile Money, hold it as USDC on blockchain, send to other users instantly for free, and withdraw back to mobile money at any time. It supports multi-currency display (EUR, XOF, USD) with live exchange rates.
+Pula Pay lets users buy USDC with fiat via Coinbase onramp, hold it on blockchain, send to other users instantly for free, and sell back to fiat via Coinbase offramp at any time. It supports multi-currency display (EUR, XOF, USD) with live exchange rates.
 
 ## Project Structure
 
@@ -25,7 +25,7 @@ pula-pay/
 | Language        | TypeScript (strict mode)            |
 | Database        | PostgreSQL + Prisma ORM             |
 | Blockchain      | Circle Programmable Wallets         |
-| Payment         | MTN MoMo API (on/off-ramp)          |
+| Payment         | Coinbase CDP Onramp/Offramp API     |
 | Exchange Rates  | CoinGecko API (cached)              |
 | Auth            | JWT + bcrypt                        |
 | Validation      | Zod                                 |
@@ -61,10 +61,10 @@ back2/src/
 │   └── errors/                # Domain exceptions
 ├── application/               # Use cases (Command/Query pattern)
 │   ├── commands/              # 8 state-changing handlers
-│   ├── queries/               # 6 read-only handlers
+│   ├── queries/               # 8 read-only handlers
 │   └── services/              # CurrencyConversionService
 └── infrastructure/            # External integrations
-    ├── adapters/              # Circle, MoMo, CoinGecko
+    ├── adapters/              # Circle, Coinbase CDP, CoinGecko
     ├── persistence/           # Prisma repositories
     └── http/                  # Controllers, routes, middleware
 ```
@@ -96,12 +96,14 @@ mobile/src/
 - Wallet address sharing via QR code
 
 ### Fiat On-Ramp (Deposit)
-- MTN Mobile Money collection (XOF/EUR to USDC)
+- Coinbase CDP onramp (USD/EUR to USDC) via redirect-based widget
+- Fee preview quotes before committing
 - Background polling fallback if webhook doesn't arrive
 - Automatic testnet token faucet on deposit confirmation
 
 ### Fiat Off-Ramp (Withdrawal)
-- MTN Mobile Money disbursement (USDC to XOF/EUR)
+- Coinbase CDP offramp (USDC to USD/EUR) via redirect-based widget
+- Fee preview quotes before committing
 - Balance + fee validation before processing
 
 ### Peer-to-Peer Transfers
@@ -158,23 +160,27 @@ mobile/src/
 | GET    | /exchange-rates/preview      | Conversion preview   |
 
 ### Wallet (Protected)
-| Method | Endpoint                     | Description              |
-|--------|------------------------------|--------------------------|
-| POST   | /wallet                      | Create wallet            |
-| GET    | /wallet/address              | Get wallet address       |
-| GET    | /wallet/balance              | Get balance              |
-| POST   | /wallet/sync-status          | Sync with Circle         |
-| POST   | /wallet/deposit              | Initiate deposit         |
-| POST   | /wallet/withdraw             | Initiate withdrawal      |
-| POST   | /wallet/transfer             | P2P transfer             |
-| GET    | /wallet/transactions         | Transaction history      |
-| GET    | /wallet/transactions/:txId   | Transaction details      |
+| Method | Endpoint                     | Description                  |
+|--------|------------------------------|------------------------------|
+| POST   | /wallet                      | Create wallet                |
+| GET    | /wallet/address              | Get wallet address           |
+| GET    | /wallet/balance              | Get balance                  |
+| POST   | /wallet/sync-status          | Sync with Circle             |
+| POST   | /wallet/deposit              | Initiate Coinbase onramp     |
+| POST   | /wallet/withdraw             | Initiate Coinbase offramp    |
+| GET    | /wallet/onramp-quote         | Preview onramp fees          |
+| GET    | /wallet/offramp-quote        | Preview offramp fees         |
+| POST   | /wallet/transfer             | P2P transfer (on-chain)      |
+| POST   | /wallet/transferable         | P2P transfer (ledger)        |
+| GET    | /wallet/resolve-recipient    | Resolve recipient            |
+| GET    | /wallet/transactions         | Transaction history          |
+| GET    | /wallet/transactions/:txId   | Transaction details          |
 
 ### Webhooks
-| Method | Endpoint             | Description                |
-|--------|----------------------|----------------------------|
-| POST   | /webhooks/momo       | MoMo payment callbacks     |
-| POST   | /webhooks/circle     | Circle wallet notifications|
+| Method | Endpoint              | Description                |
+|--------|-----------------------|----------------------------|
+| POST   | /webhooks/coinbase-cdp| Coinbase CDP callbacks     |
+| POST   | /webhooks/circle      | Circle wallet notifications|
 
 ### Health
 | Method | Endpoint  | Description         |
@@ -190,7 +196,7 @@ Core tables managed by Prisma:
 - **users** — Accounts with KYC levels and preferences
 - **wallets** — Circle wallets with local balance sync
 - **transactions** — All operations with state machine
-- **onramp_transactions** — MoMo-specific details
+- **onramp_transactions** — Provider-specific details (Coinbase CDP)
 - **ledger_entries** — Double-entry accounting records
 - **exchange_rates** — Cached rates with TTL
 - **webhook_events** — Webhook processing queue
@@ -212,7 +218,7 @@ Core tables managed by Prisma:
 - **Idempotency** — Every command uses idempotency keys to prevent duplicate processing
 - **Atomic transactions** — Wallet balance updates + ledger entries in a single Prisma transaction
 - **State machine** — Transactions follow strict valid state transitions
-- **Polling fallback** — If MoMo webhooks don't arrive, background polling completes transactions
+- **Polling fallback** — If Coinbase CDP webhooks don't arrive, background polling completes transactions
 - **Decimal precision** — All financial math uses Decimal.js (6 decimals for USDC, 2 for fiat)
 - **Secure storage** — Mobile tokens stored in iOS Keychain / Android Keystore
 

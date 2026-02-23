@@ -5,7 +5,7 @@ import {
   createMockWalletRepository,
 } from '../../../__tests__/mocks/repositories.mock';
 import { createMockWalletProvider } from '../../../__tests__/mocks/adapters.mock';
-import { createUser, createWallet, userFixtures, walletFixtures } from '../../../__tests__/fixtures';
+import { createWallet, userFixtures, walletFixtures } from '../../../__tests__/fixtures';
 
 describe('CreateWalletHandler', () => {
   let handler: CreateWalletHandler;

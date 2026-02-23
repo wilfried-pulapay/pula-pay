@@ -1,35 +1,51 @@
 import Decimal from 'decimal.js';
-import { Currency, PrismaClient } from '@prisma/client';
+import { Currency } from '@prisma/client';
 import { ExchangeRateProvider, ExchangeRateResult } from '../../../domain/ports/ExchangeRateProvider';
-import { config } from '../../../shared/config';
+import { cache } from '../../cache/redis-cache';
 import { logger } from '../../../shared/utils/logger';
 
+const CACHE_TTL_SECONDS = 300; // 5 minutes
+
+interface CachedRate {
+  baseCurrency: 'USDC';
+  quoteCurrency: Currency;
+  rate: string;
+  timestamp: string;
+  source: string;
+}
+
 /**
- * Caching decorator for exchange rate providers
+ * Caching decorator for exchange rate providers — uses Redis instead of DB
  */
 export class CachedExchangeRateAdapter implements ExchangeRateProvider {
-  private readonly cacheTtlMs: number;
-
   constructor(
     private readonly upstream: ExchangeRateProvider,
-    private readonly prisma: PrismaClient
-  ) {
-    this.cacheTtlMs = config.exchangeRate.cacheTtlMinutes * 60 * 1000;
-  }
+  ) {}
 
   async getRate(currency: Currency): Promise<ExchangeRateResult> {
-    // Check cache
-    const cached = await this.getCachedRate(currency);
+    const cacheKey = `exchange-rate:${currency}`;
+
+    const cached = await cache.get<CachedRate>(cacheKey);
     if (cached) {
       logger.debug({ currency, source: 'cache' }, 'Exchange rate from cache');
-      return cached;
+      return {
+        baseCurrency: cached.baseCurrency,
+        quoteCurrency: cached.quoteCurrency,
+        rate: new Decimal(cached.rate),
+        timestamp: new Date(cached.timestamp),
+        source: cached.source,
+      };
     }
 
-    // Fetch from upstream
     const rate = await this.upstream.getRate(currency);
 
-    // Store in cache
-    await this.cacheRate(rate);
+    await cache.set<CachedRate>(cacheKey, {
+      baseCurrency: rate.baseCurrency,
+      quoteCurrency: rate.quoteCurrency,
+      rate: rate.rate.toString(),
+      timestamp: rate.timestamp.toISOString(),
+      source: rate.source,
+    }, CACHE_TTL_SECONDS);
 
     return rate;
   }
@@ -38,68 +54,36 @@ export class CachedExchangeRateAdapter implements ExchangeRateProvider {
     const results = new Map<Currency, ExchangeRateResult>();
     const missing: Currency[] = [];
 
-    // Check cache for each
     for (const currency of currencies) {
-      const cached = await this.getCachedRate(currency);
+      const cacheKey = `exchange-rate:${currency}`;
+      const cached = await cache.get<CachedRate>(cacheKey);
       if (cached) {
-        results.set(currency, cached);
+        results.set(currency, {
+          baseCurrency: cached.baseCurrency,
+          quoteCurrency: cached.quoteCurrency,
+          rate: new Decimal(cached.rate),
+          timestamp: new Date(cached.timestamp),
+          source: cached.source,
+        });
       } else {
         missing.push(currency);
       }
     }
 
-    // Fetch missing from upstream
     if (missing.length > 0) {
       const upstream = await this.upstream.getRates(missing);
       for (const [currency, rate] of upstream) {
-        await this.cacheRate(rate);
+        await cache.set<CachedRate>(`exchange-rate:${currency}`, {
+          baseCurrency: rate.baseCurrency,
+          quoteCurrency: rate.quoteCurrency,
+          rate: rate.rate.toString(),
+          timestamp: rate.timestamp.toISOString(),
+          source: rate.source,
+        }, CACHE_TTL_SECONDS);
         results.set(currency, rate);
       }
     }
 
     return results;
-  }
-
-  private async getCachedRate(currency: Currency): Promise<ExchangeRateResult | null> {
-    const now = new Date();
-
-    const cached = await this.prisma.exchangeRate.findFirst({
-      where: {
-        baseCurrency: 'USDC',
-        quoteCurrency: currency,
-        validUntil: { gt: now },
-      },
-      orderBy: { validFrom: 'desc' },
-    });
-
-    if (!cached) return null;
-
-    return {
-      baseCurrency: 'USDC',
-      quoteCurrency: currency,
-      rate: new Decimal(cached.rate.toString()),
-      timestamp: cached.validFrom,
-      source: cached.source,
-    };
-  }
-
-  private async cacheRate(rate: ExchangeRateResult): Promise<void> {
-    const validUntil = new Date(Date.now() + this.cacheTtlMs);
-
-    try {
-      await this.prisma.exchangeRate.create({
-        data: {
-          baseCurrency: 'USDC',
-          quoteCurrency: rate.quoteCurrency,
-          rate: rate.rate.toNumber(),
-          source: rate.source,
-          validFrom: rate.timestamp,
-          validUntil,
-        },
-      });
-    } catch (error) {
-      // Ignore duplicate key errors (race condition)
-      logger.debug({ error, currency: rate.quoteCurrency }, 'Failed to cache rate');
-    }
   }
 }

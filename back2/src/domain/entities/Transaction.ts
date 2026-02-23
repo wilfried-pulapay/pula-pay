@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { TxType, TxStatus, Currency } from '@prisma/client';
-import { InvalidTransactionStateError } from '../errors/InvalidTransactionStateError';
+import { transactionMachine } from '../state-machines/transaction.machine';
+import { applyTransition } from '../state-machines/helpers';
 
 export interface TransactionProps {
   id: string;
@@ -23,18 +24,8 @@ export interface TransactionProps {
   completedAt: Date | null;
 }
 
-// Valid state transitions
-const VALID_TRANSITIONS: Record<TxStatus, TxStatus[]> = {
-  PENDING: ['PROCESSING', 'CANCELLED', 'EXPIRED', 'FAILED'],
-  PROCESSING: ['COMPLETED', 'FAILED'],
-  COMPLETED: [], // Terminal
-  FAILED: [], // Terminal
-  CANCELLED: [], // Terminal
-  EXPIRED: [], // Terminal
-};
-
 /**
- * Transaction entity with state machine
+ * Transaction entity — delegates state transitions to XState machine
  */
 export class Transaction {
   constructor(private props: TransactionProps) {}
@@ -142,39 +133,60 @@ export class Transaction {
     return this.props.type === 'TRANSFER_P2P';
   }
 
-  // State transitions
-  private transitionTo(newStatus: TxStatus): void {
-    const validNext = VALID_TRANSITIONS[this.props.status];
-    if (!validNext.includes(newStatus)) {
-      throw new InvalidTransactionStateError(this.props.id, this.props.status, newStatus);
-    }
-    this.props.status = newStatus;
-    this.props.updatedAt = new Date();
+  // XState context for machine
+  private get machineContext() {
+    return {
+      id: this.props.id,
+      amountUsdc: this.props.amountUsdc.toString(),
+      feeUsdc: this.props.feeUsdc.toString(),
+      failureReason: this.props.failureReason ?? undefined,
+    };
   }
 
+  // State transitions (delegated to XState)
   markProcessing(externalRef?: string): void {
-    this.transitionTo('PROCESSING');
+    const { newStatus } = applyTransition(
+      transactionMachine, this.props.status, { type: 'PROCESS' }, this.machineContext,
+    );
+    this.props.status = newStatus as TxStatus;
+    this.props.updatedAt = new Date();
     if (externalRef) {
       this.props.externalRef = externalRef;
     }
   }
 
   complete(): void {
-    this.transitionTo('COMPLETED');
+    const { newStatus } = applyTransition(
+      transactionMachine, this.props.status, { type: 'COMPLETE' }, this.machineContext,
+    );
+    this.props.status = newStatus as TxStatus;
     this.props.completedAt = new Date();
+    this.props.updatedAt = new Date();
   }
 
   fail(reason: string): void {
-    this.transitionTo('FAILED');
-    this.props.failureReason = reason;
+    const { newStatus, newContext } = applyTransition(
+      transactionMachine, this.props.status, { type: 'FAIL', reason }, this.machineContext,
+    );
+    this.props.status = newStatus as TxStatus;
+    this.props.failureReason = newContext.failureReason;
+    this.props.updatedAt = new Date();
   }
 
   cancel(): void {
-    this.transitionTo('CANCELLED');
+    const { newStatus } = applyTransition(
+      transactionMachine, this.props.status, { type: 'CANCEL' }, this.machineContext,
+    );
+    this.props.status = newStatus as TxStatus;
+    this.props.updatedAt = new Date();
   }
 
   expire(): void {
-    this.transitionTo('EXPIRED');
+    const { newStatus } = applyTransition(
+      transactionMachine, this.props.status, { type: 'EXPIRE' }, this.machineContext,
+    );
+    this.props.status = newStatus as TxStatus;
+    this.props.updatedAt = new Date();
   }
 
   // Metadata

@@ -104,7 +104,7 @@ export class WalletController {
     try {
       const data = createWalletSchema.parse(req.body);
       const result = await this.createWalletHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
         blockchain: data.blockchain,
       });
 
@@ -129,7 +129,7 @@ export class WalletController {
     try {
       const currency = req.query.currency as Currency | undefined;
       const result = await this.balanceHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
         displayCurrency: currency,
       });
 
@@ -154,7 +154,7 @@ export class WalletController {
     try {
       const data = depositSchema.parse(req.body);
       const result = await this.depositHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
         fiatAmount: data.amount,
         fiatCurrency: data.currency,
         country: data.country,
@@ -182,7 +182,7 @@ export class WalletController {
     try {
       const data = withdrawSchema.parse(req.body);
       const result = await this.withdrawHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
         fiatAmount: data.amount,
         fiatCurrency: data.targetCurrency,
         country: data.country,
@@ -210,7 +210,7 @@ export class WalletController {
     try {
       const data = transferSchema.parse(req.body);
       const result = await this.transferHandler.execute({
-        senderUserId: req.userId!,
+        senderUserId: req.user!.id,
         recipientPhone: data.recipientPhone,
         recipientWalletAddress: data.recipientAddress,
         amount: data.amount,
@@ -239,7 +239,7 @@ export class WalletController {
     try {
       const data = transferSchema.parse(req.body);
       const result = await this.simpleTransferHandler.execute({
-        senderUserId: req.userId!,
+        senderUserId: req.user!.id,
         recipientPhone: data.recipientPhone,
         recipientAddress: data.recipientAddress,
         amount: data.amount,
@@ -268,7 +268,7 @@ export class WalletController {
     try {
       const query = historyQuerySchema.parse(req.query);
       const result = await this.historyHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
         type: query.type,
         status: query.status,
         fromDate: query.fromDate ? new Date(query.fromDate) : undefined,
@@ -298,7 +298,7 @@ export class WalletController {
     try {
       const { txId } = req.params;
       const result = await this.transactionByIdHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
         transactionId: txId,
       });
 
@@ -322,7 +322,7 @@ export class WalletController {
   ): Promise<void> => {
     try {
       const result = await this.addressHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
       });
 
       res.json({
@@ -346,7 +346,7 @@ export class WalletController {
     try {
       // First get user's wallet ID
       const balanceResult = await this.balanceHandler.execute({
-        userId: req.userId!,
+        userId: req.user!.id,
       });
 
       const result = await this.syncStatusHandler.execute({
