@@ -27,17 +27,15 @@ const envSchema = z.object({
   APPLE_CLIENT_ID: z.string().optional(),
   APPLE_CLIENT_SECRET: z.string().optional(),
 
-  // Circle
+  // Circle (User-Controlled Wallets)
   CIRCLE_API_KEY: z.string(),
-  CIRCLE_ENTITY_SECRET: z.string(),
-  CIRCLE_WALLET_SET_ID: z.string(),
+  CIRCLE_APP_ID: z.string(),
   CIRCLE_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
-  CIRCLE_RSA_PUBLIC_KEY: z.string(),
 
   // Blockchain
-  DEFAULT_BLOCKCHAIN: z.string().default('POLYGON_AMOY'),
-  USDC_TOKEN_ID_POLYGON_AMOY: z.string().default('36b6931a-873a-56a8-8a27-b706b17104ee'),
-  USDC_TOKEN_ID_POLYGON: z.string().default('db6905b9-8bcd-5537-8b08-f5548bdf7925'),
+  DEFAULT_BLOCKCHAIN: z.string().default('BASE_SEPOLIA'),
+  USDC_TOKEN_ID_BASE_SEPOLIA: z.string().default(''),
+  USDC_TOKEN_ID_BASE: z.string().default(''),
 
   // Exchange Rate
   EXCHANGE_RATE_PROVIDER: z.string().default('coingecko'),
@@ -45,8 +43,8 @@ const envSchema = z.object({
   XOF_EUR_FIXED_RATE: z.string().default('655.957').transform(Number),
 
   // Coinbase CDP (Onramp/Offramp)
-  COINBASE_CDP_API_KEY_NAME: z.string().optional(),
-  COINBASE_CDP_API_KEY_PRIVATE_KEY: z.string().optional(),
+  COINBASE_CDP_API_KEY_NAME: z.string().min(1),
+  COINBASE_CDP_API_KEY_PRIVATE_KEY: z.string().min(1),
   COINBASE_CDP_BASE_URL: z.string().default('https://api.developer.coinbase.com'),
   COINBASE_CDP_DEFAULT_COUNTRY: z.string().default('US'),
 
@@ -102,10 +100,8 @@ export const config = {
 
   circle: {
     apiKey: env.CIRCLE_API_KEY,
-    entitySecret: env.CIRCLE_ENTITY_SECRET,
-    walletSetId: env.CIRCLE_WALLET_SET_ID,
+    appId: env.CIRCLE_APP_ID,
     environment: env.CIRCLE_ENVIRONMENT,
-    rsaPublicKey: env.CIRCLE_RSA_PUBLIC_KEY,
   },
 
   blockchain: {
@@ -114,8 +110,8 @@ export const config = {
 
   usdc: {
     tokenIds: {
-      POLYGON_AMOY: env.USDC_TOKEN_ID_POLYGON_AMOY,
-      POLYGON: env.USDC_TOKEN_ID_POLYGON,
+      BASE_SEPOLIA: env.USDC_TOKEN_ID_BASE_SEPOLIA,
+      BASE: env.USDC_TOKEN_ID_BASE,
     } as Record<string, string>,
   },
 

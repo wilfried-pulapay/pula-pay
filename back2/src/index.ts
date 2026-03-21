@@ -28,7 +28,8 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   app.use(
     cors({
-      origin: config.env === 'production' ? ['https://pulapay.com'] : '*',
+      origin: config.env === 'production' ? ['https://pulapay.com'] : true,
+      credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
     })
@@ -55,18 +56,22 @@ async function bootstrap(): Promise<void> {
     })
   );
 
-  // Body parsing
+  // Connect to database
+  await connectDatabase();
+
+  // Request logging — must be before all routes so every request is captured
+  app.use(requestLogger);
+
+  // Better Auth routes — must be mounted BEFORE express.json() because
+  // toNodeHandler reads the raw body stream (express.json would drain it)
+  mountAuthRoutes(app);
+
+  // Body parsing (for /api/v2 routes only, after auth is mounted)
   app.use(express.json({ limit: '10kb' }));
   app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
   // Compression
   app.use(compression());
-
-  // Request logging
-  app.use(requestLogger);
-
-  // Connect to database
-  await connectDatabase();
 
   // Swagger documentation
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -77,9 +82,6 @@ async function bootstrap(): Promise<void> {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
-
-  // Better Auth routes (must be before body parser issues)
-  mountAuthRoutes(app);
 
   // API routes
   app.use('/api/v2', createRouter(prisma));

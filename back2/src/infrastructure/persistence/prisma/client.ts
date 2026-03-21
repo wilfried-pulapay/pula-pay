@@ -4,14 +4,7 @@ import { config } from '../../../shared/config';
 
 const prismaClientSingleton = () => {
   return new PrismaClient({
-    log:
-      config.env === 'development'
-        ? [
-            { emit: 'event', level: 'query' },
-            { emit: 'event', level: 'error' },
-            { emit: 'event', level: 'warn' },
-          ]
-        : [{ emit: 'event', level: 'error' }],
+    log: [{ emit: 'event', level: 'error' }],
   });
 };
 
@@ -24,13 +17,6 @@ export const prisma = globalThis.prisma ?? prismaClientSingleton();
 
 if (config.env !== 'production') {
   globalThis.prisma = prisma;
-}
-
-// Log queries in development
-if (config.env === 'development') {
-  prisma.$on('query' as never, (e: { query: string; duration: number }) => {
-    logger.debug({ query: e.query, duration: e.duration }, 'Prisma query');
-  });
 }
 
 prisma.$on('error' as never, (e: { message: string }) => {
