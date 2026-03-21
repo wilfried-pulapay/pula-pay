@@ -5,6 +5,7 @@ import type { DisplayCurrency } from "../api/types";
 const CURRENCY_FORMATS: Record<DisplayCurrency, { locale: string; decimals: number }> = {
     EUR: { locale: "fr-FR", decimals: 2 },
     XOF: { locale: "fr-FR", decimals: 0 },
+    USD: { locale: "en-US", decimals: 2 },
 };
 
 function formatCurrency(value: number, currency: DisplayCurrency): string {

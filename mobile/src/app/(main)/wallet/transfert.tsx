@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 import PhoneInput, { ICountry } from '@/src/components/ui/phone-input';
 import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
+import { executeCircleChallenge } from '@/src/lib/circle';
+import type { TransferResponse } from '@/src/api/types';
 
 import { useRecipientId } from '@/src/hooks/use-recipient-id';
-import { useAuthStore } from '@/src/store/authStore';
+import { useAuth } from '@/src/lib/auth';
 import { useWalletStore } from '@/src/store/walletStore';
 import { useConversion } from '@/src/hooks/use-conversion';
-import { sanitizeCountryCode, sanitizePhoneNumber } from '@/src/utils/phone';
+import { sanitizePhoneNumber } from '@/src/utils/phone';
 import { getApiError } from '@/src/utils/api-error';
 import { toast } from '@/src/store/toastStore';
 import { useTheme } from '@/src/theme';
@@ -38,7 +40,7 @@ export default function Transfer() {
     } | null>(null);
 
     const { recipientId, errorKey: recipientErrorKey, getPhoneUserId } = useRecipientId();
-    const { user } = useAuthStore();
+    const { user } = useAuth();
     const { transfer, loading, error, displayCurrency, balanceUsdc, syncWalletStatus } = useWalletStore();
     const { toUsdc, toDisplay, rate, loading: rateLoading, refresh: refreshRate } = useConversion(displayCurrency);
 
@@ -57,7 +59,7 @@ export default function Transfer() {
     useEffect(() => {
         if (!user?.id || !queryPhone) return;
         const handler = setTimeout(() => {
-            const formattedPhone = `${sanitizeCountryCode(countryCode?.idd.root as string)}${sanitizePhoneNumber(queryPhone)}`;
+            const formattedPhone = `${countryCode?.idd.root}${sanitizePhoneNumber(queryPhone)}`;
             getPhoneUserId(formattedPhone);
         }, 400);
         return () => clearTimeout(handler);
@@ -66,7 +68,7 @@ export default function Transfer() {
     // Set recipient phone when user is found
     useEffect(() => {
         if (recipientId && !recipientPhone && queryPhone) {
-            setRecipientPhone(`${sanitizeCountryCode(countryCode?.idd.root as string)}${sanitizePhoneNumber(queryPhone)}`);
+            setRecipientPhone(`${countryCode?.idd.root}${sanitizePhoneNumber(queryPhone)}`);
         }
     }, [recipientId, queryPhone, recipientPhone, countryCode]);
 
@@ -96,24 +98,31 @@ export default function Transfer() {
                 return;
             }
 
-            const txId = await transfer({
-                receiverId: recipientId,
-                receiverPhone: recipientPhone,
-                amount: String(amount),
+            // Initiate transfer — returns challenge for PIN confirmation
+            const response = await transfer({
+                recipientPhone: recipientPhone,
+                amount: parseFloat(amount),
                 currency: displayCurrency,
                 description: note || undefined,
             });
+
+            // Execute Circle SDK challenge natively (PIN confirmation)
+            await executeCircleChallenge(response);
+
             setSubmittedTx({
                 amount,
-                amountUsdc: estimatedUsdc,
+                amountUsdc: response.amountUsdc,
                 recipientPhone,
-                txId,
+                txId: response.transactionId,
             });
             toast.success(t('transfer.success'));
         } catch (err: unknown) {
-            const { translationKey, message } = getApiError(err);
+            const { code, translationKey, message } = getApiError(err);
             const errorMessage = message || t(translationKey);
             toast.error(errorMessage, 6000);
+            if (code === 'WALLET_NOT_FOUND') {
+                router.replace('/(main)/dashboard');
+            }
         }
     };
 
@@ -140,6 +149,7 @@ export default function Transfer() {
     }
 
     return (
+        <>
         <Screen>
             <ArrowLeft onPress={() => router.replace('/(main)/wallet')} color={theme.colors.text} />
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -216,6 +226,7 @@ export default function Transfer() {
                 {error && <Text style={styles.error}>{error}</Text>}
             </ScrollView>
         </Screen>
+        </>
     );
 }
 
@@ -230,50 +241,55 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         paddingBottom: theme.spacing.xl,
     },
     title: {
-        ...theme.typography.h1,
+        fontSize: 22,
+        fontWeight: '700',
+        letterSpacing: -0.5,
         color: theme.colors.text,
         marginBottom: theme.spacing.m,
     },
     balanceInfo: {
         backgroundColor: theme.colors.surface,
         padding: theme.spacing.m,
-        borderRadius: theme.borderRadius.m,
+        borderRadius: theme.borderRadius.l,
         marginBottom: theme.spacing.m,
         borderWidth: 1,
-        borderColor: theme.colors.outline,
+        borderColor: theme.colors.border,
     },
     balanceLabel: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.textMuted,
     },
     balanceValue: {
-        ...theme.typography.h2,
+        fontSize: 32,
+        fontWeight: '800',
+        letterSpacing: -1,
         color: theme.colors.text,
-        fontWeight: 'bold',
     },
     balanceUsdc: {
-        ...theme.typography.caption,
+        fontSize: 14,
         color: theme.colors.textMuted,
+        marginTop: 4,
     },
     inputGroup: {
         marginBottom: theme.spacing.m,
     },
     label: {
-        ...theme.typography.caption,
+        fontSize: 12,
+        fontWeight: '600',
         color: theme.colors.text,
         marginBottom: theme.spacing.xs,
     },
     input: {
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderRadius: theme.borderRadius.m,
         padding: theme.spacing.s,
-        fontSize: 16,
-        backgroundColor: theme.colors.inputBackground,
+        fontSize: 14,
+        backgroundColor: theme.colors.surface,
         color: theme.colors.text,
-        borderColor: theme.colors.outline,
+        borderColor: theme.colors.border,
     },
     usdcEquivalent: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.textMuted,
         marginTop: theme.spacing.xs,
     },
@@ -281,32 +297,39 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         marginTop: theme.spacing.m,
     },
     error: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.danger,
         marginTop: theme.spacing.xs,
     },
     successMessage: {
-        ...theme.typography.caption,
+        fontSize: 11,
+        fontWeight: '600',
         color: theme.colors.success,
         marginTop: theme.spacing.xs,
+        backgroundColor: theme.colors.successLight,
+        borderRadius: theme.borderRadius.full,
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        alignSelf: 'flex-start',
     },
     successTitle: {
-        ...theme.typography.h2,
+        fontSize: 22,
+        fontWeight: '700',
         color: theme.colors.text,
         marginBottom: theme.spacing.m,
     },
     detailsContainer: {
         marginBottom: theme.spacing.m,
         borderWidth: 1,
-        borderRadius: theme.borderRadius.m,
-        padding: theme.spacing.s,
+        borderRadius: theme.borderRadius.l,
+        padding: theme.spacing.m,
         backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.outline,
+        borderColor: theme.colors.border,
     },
     value: {
-        ...theme.typography.body,
+        fontSize: 14,
         color: theme.colors.text,
-        fontWeight: 'bold',
+        fontWeight: '600',
         marginBottom: theme.spacing.xs,
     },
 });

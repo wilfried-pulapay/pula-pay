@@ -10,8 +10,8 @@ export function useBalance() {
         setError(null);
         setLoading(true);
         try {
-            const { balance } = await getUserBalance(userId, currency);
-            setBalance(Number(balance ?? 0));
+            const data = await getUserBalance(userId, currency);
+            setBalance(Number(data.balanceUsdc ?? 0));
         } catch (e: any) {
             setError(e?.response?.data?.error || e.message || "Failed to create deposit");
         } finally {

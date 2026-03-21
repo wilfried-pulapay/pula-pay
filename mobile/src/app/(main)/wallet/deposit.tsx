@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, ActivityIndicator, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import PhoneInput from '@/src/components/ui/phone-input';
 import { router } from 'expo-router';
-import { ArrowLeft, Smartphone, CreditCard, Download, Check } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Building2, Smartphone, Download, Check } from 'lucide-react-native';
 
-import { useAuthStore } from '@/src/store/authStore';
+import { useAuth } from '@/src/lib/auth';
 import { useWalletStore } from '@/src/store/walletStore';
 import { useConversion } from '@/src/hooks/use-conversion';
 import { getApiError } from '@/src/utils/api-error';
@@ -15,19 +14,21 @@ import { useStyles } from '@/src/hooks/use-styles';
 import Screen from '@/src/components/screen';
 import Button from '@/src/components/ui/button';
 import ExchangeRateIndicator from '@/src/components/exchange-rate';
+import CoinbaseWebView from '@/src/components/coinbase-webview';
 import type { Theme } from '@/src/theme/types';
-import type { OnRampProvider } from '@/src/api/types';
+import type { PaymentMethod } from '@/src/api/types';
 
 type DepositMethod = {
-    id: OnRampProvider;
+    id: PaymentMethod | 'CRYPTO';
     name: string;
-    icon: typeof Smartphone;
+    icon: typeof CreditCard;
     available: boolean;
 };
 
 const DEPOSIT_METHODS: DepositMethod[] = [
-    { id: 'MTN_MOMO', name: 'MTN Mobile Money', icon: Smartphone, available: true },
-    { id: 'ORANGE_MONEY', name: 'Orange Money', icon: Smartphone, available: false },
+    { id: 'CARD', name: 'Card', icon: CreditCard, available: true },
+    { id: 'ACH_BANK_ACCOUNT', name: 'Bank Transfer', icon: Building2, available: true },
+    { id: 'APPLE_PAY', name: 'Apple Pay', icon: Smartphone, available: true },
     { id: 'CRYPTO', name: 'Receive Crypto', icon: Download, available: true },
 ];
 
@@ -37,19 +38,19 @@ export default function Deposit() {
     const styles = useStyles(getStyles);
     const locale = i18n.language === 'en' ? 'en-GB' : 'fr-FR';
 
-    const [selectedMethod, setSelectedMethod] = useState<OnRampProvider>('MTN_MOMO');
-    const [phone, setPhone] = useState('');
+    const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('CARD');
     const [amount, setAmount] = useState('');
+    const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+    const [showWebView, setShowWebView] = useState(false);
     const [submittedTx, setSubmittedTx] = useState<{
         amount: string;
         amountUsdc: string;
-        phone: string;
-        method: OnRampProvider;
+        method: string;
         txId: string | null;
     } | null>(null);
 
-    const { user } = useAuthStore();
-    const { deposit, loading, error, displayCurrency, syncWalletStatus } = useWalletStore();
+    const { user } = useAuth();
+    const { deposit, loading, error, displayCurrency, syncWalletStatus, trackTransaction } = useWalletStore();
     const { toUsdc, rate, loading: rateLoading, refresh: refreshRate } = useConversion(displayCurrency);
 
     const formatAmount = (value: string) => {
@@ -62,13 +63,7 @@ export default function Deposit() {
 
     const estimatedUsdc = amount ? toUsdc(amount) : '0';
 
-    useEffect(() => {
-        if (user?.phone) {
-            setPhone(user.phone);
-        }
-    }, [user]);
-
-    const handleMethodSelect = (method: OnRampProvider) => {
+    const handleMethodSelect = (method: PaymentMethod | 'CRYPTO') => {
         if (method === 'CRYPTO') {
             router.push('/wallet/receive');
             return;
@@ -79,11 +74,6 @@ export default function Deposit() {
     const handleSubmit = async () => {
         if (!user?.id) {
             toast.error(t('errors.unauthenticated'));
-            return;
-        }
-
-        if (selectedMethod !== 'MTN_MOMO') {
-            toast.error(t('deposit.methodNotSupported'));
             return;
         }
 
@@ -101,43 +91,70 @@ export default function Deposit() {
                 return;
             }
 
-            const txId = await deposit({
-                amount: parseFloat(amount).toString(),
+            const response = await deposit({
+                amount: parseFloat(amount),
                 currency: displayCurrency,
-                provider: selectedMethod,
-                msisdn: phone,
+                paymentMethod: selectedMethod,
             });
+
+            // If we got a payment URL, open the Coinbase WebView
+            if (response.paymentUrl) {
+                setPaymentUrl(response.paymentUrl);
+                setShowWebView(true);
+                // Start tracking in background
+                trackTransaction(response.transactionId);
+            }
+
             setSubmittedTx({
                 amount,
-                amountUsdc: estimatedUsdc,
-                phone,
+                amountUsdc: response.amountUsdc,
                 method: selectedMethod,
-                txId,
+                txId: response.transactionId,
             });
-            toast.success(t('deposit.success'));
         } catch (err: unknown) {
-            const { translationKey, message } = getApiError(err);
-            // Show detailed message for better user feedback
+            const { code, translationKey, message } = getApiError(err);
             const errorMessage = message || t(translationKey);
             toast.error(errorMessage, 6000);
+            if (code === 'WALLET_NOT_FOUND') {
+                router.replace('/(main)/dashboard');
+            }
         }
     };
 
-    if (submittedTx) {
+    const handleWebViewClose = () => {
+        setShowWebView(false);
+        setPaymentUrl(null);
+        // If we have a submitted transaction, show success
+        if (submittedTx) {
+            toast.success(t('deposit.success'));
+        }
+    };
+
+    // Show WebView for Coinbase payment
+    if (showWebView && paymentUrl) {
+        return (
+            <CoinbaseWebView
+                paymentUrl={paymentUrl}
+                visible={showWebView}
+                onClose={handleWebViewClose}
+                onComplete={handleWebViewClose}
+            />
+        );
+    }
+
+    if (submittedTx && !showWebView) {
         return (
             <Screen>
                 <ArrowLeft onPress={() => router.replace('/(main)/wallet')} color={theme.colors.text} />
                 <View style={styles.container}>
                     <Text style={styles.successTitle}>{t('deposit.success')}</Text>
                     <View style={styles.detailsContainer}>
-                        <Text style={styles.label}>{t('deposit.method')}:</Text>
-                        <Text style={styles.value}>{submittedTx.method}</Text>
+                        <Text style={styles.label}>{t('deposit.paymentMethod')}:</Text>
+                        <Text style={styles.value}>{t(`deposit.${selectedMethod.toLowerCase()}`)}</Text>
                         <Text style={styles.label}>{t('deposit.amount')}:</Text>
                         <Text style={styles.value}>{formatAmount(submittedTx.amount)}</Text>
                         <Text style={styles.label}>{t('deposit.equivalentUsdc')}:</Text>
                         <Text style={styles.value}>~{parseFloat(submittedTx.amountUsdc).toFixed(2)} USDC</Text>
-                        <Text style={styles.label}>{t('deposit.phone')}:</Text>
-                        <Text style={styles.value}>{submittedTx.phone}</Text>
                         {submittedTx.txId && (
                             <>
                                 <Text style={styles.label}>{t('deposit.txId')}:</Text>
@@ -163,7 +180,7 @@ export default function Deposit() {
                     <View style={styles.methodGrid}>
                         {DEPOSIT_METHODS.map((method) => {
                             const Icon = method.icon;
-                            const isSelected = selectedMethod === method.id && method.id !== 'CRYPTO';
+                            const isSelected = method.id !== 'CRYPTO' && selectedMethod === method.id;
                             return (
                                 <TouchableOpacity
                                     key={method.id}
@@ -186,9 +203,6 @@ export default function Deposit() {
                                     ]}>
                                         {t(`deposit.${method.id.toLowerCase()}`) || method.name}
                                     </Text>
-                                    {!method.available && (
-                                        <Text style={styles.comingSoon}>{t('common.comingSoon')}</Text>
-                                    )}
                                     {isSelected && (
                                         <View style={styles.checkMark}>
                                             <Check size={16} color={theme.colors.primary} />
@@ -200,17 +214,9 @@ export default function Deposit() {
                     </View>
                 </View>
 
-                {/* Phone Input for MoMo */}
-                {selectedMethod === 'MTN_MOMO' && (
+                {/* Amount Input */}
+                {(selectedMethod as string) !== 'CRYPTO' && (
                     <>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>{t('deposit.phone')}</Text>
-                            <PhoneInput
-                                value={phone.slice(3)}
-                                disabled
-                            />
-                        </View>
-
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>{t('deposit.amount')} ({displayCurrency})</Text>
                             <TextInput
@@ -264,7 +270,9 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         paddingBottom: theme.spacing.xl,
     },
     title: {
-        ...theme.typography.h1,
+        fontSize: 22,
+        fontWeight: '700',
+        letterSpacing: -0.5,
         color: theme.colors.text,
         marginBottom: theme.spacing.m,
     },
@@ -272,18 +280,19 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         marginBottom: theme.spacing.m,
     },
     label: {
-        ...theme.typography.caption,
+        fontSize: 12,
+        fontWeight: '600',
         color: theme.colors.text,
         marginBottom: theme.spacing.xs,
     },
     input: {
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderRadius: theme.borderRadius.m,
         padding: theme.spacing.s,
-        fontSize: 16,
-        backgroundColor: theme.colors.inputBackground,
+        fontSize: 14,
+        backgroundColor: theme.colors.surface,
         color: theme.colors.text,
-        borderColor: theme.colors.outline,
+        borderColor: theme.colors.border,
     },
     methodGrid: {
         flexDirection: 'row',
@@ -294,9 +303,9 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         flex: 1,
         minWidth: 100,
         padding: theme.spacing.m,
-        borderRadius: theme.borderRadius.m,
-        borderWidth: 1,
-        borderColor: theme.colors.outline,
+        borderRadius: theme.borderRadius.l,
+        borderWidth: 1.5,
+        borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface,
         alignItems: 'center',
         position: 'relative',
@@ -309,7 +318,7 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         opacity: 0.5,
     },
     methodName: {
-        ...theme.typography.caption,
+        fontSize: 12,
         color: theme.colors.text,
         marginTop: theme.spacing.xs,
         textAlign: 'center',
@@ -321,19 +330,13 @@ const getStyles = (theme: Theme) => StyleSheet.create({
     methodNameDisabled: {
         color: theme.colors.textMuted,
     },
-    comingSoon: {
-        ...theme.typography.caption,
-        color: theme.colors.textMuted,
-        fontSize: 10,
-        marginTop: 2,
-    },
     checkMark: {
         position: 'absolute',
         top: theme.spacing.xs,
         right: theme.spacing.xs,
     },
     usdcEquivalent: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.textMuted,
         marginTop: theme.spacing.xs,
     },
@@ -341,27 +344,28 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         marginTop: theme.spacing.m,
     },
     error: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.danger,
         marginTop: theme.spacing.xs,
     },
     successTitle: {
-        ...theme.typography.h2,
+        fontSize: 22,
+        fontWeight: '700',
         color: theme.colors.text,
         marginBottom: theme.spacing.m,
     },
     detailsContainer: {
         marginBottom: theme.spacing.m,
         borderWidth: 1,
-        borderRadius: theme.borderRadius.m,
-        padding: theme.spacing.s,
+        borderRadius: theme.borderRadius.l,
+        padding: theme.spacing.m,
         backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.outline,
+        borderColor: theme.colors.border,
     },
     value: {
-        ...theme.typography.body,
+        fontSize: 14,
         color: theme.colors.text,
-        fontWeight: 'bold',
+        fontWeight: '600',
         marginBottom: theme.spacing.xs,
     },
 });

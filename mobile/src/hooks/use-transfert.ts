@@ -16,8 +16,8 @@ export function useTransfer() {
         setLoading(true);
         setStatus("PENDING");
         try {
-            const { txId: newTxId } = await createTransfer(payload);
-            setTxId(newTxId);
+            const { transactionId } = await createTransfer(payload);
+            setTxId(transactionId);
         } catch (e: unknown) {
             const err = e as ApiError;
             setError(err?.response?.data?.error || err.message || "Failed to create transfer");

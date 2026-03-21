@@ -1,44 +1,55 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createDeposit, getTxStatus } from "../api/wallet";
-import type { DepositRequest, TxStatus } from "../api/types";
+import type { DepositRequest, DepositResponse, TxStatus } from "../api/types";
 
-type ApiError = { response?: { data?: { error?: string } }; message?: string };
+type ApiError = { response?: { data?: { error?: { message?: string } | string } }; message?: string };
 
 export function useDeposit() {
     const [txId, setTxId] = useState<string | null>(null);
     const [status, setStatus] = useState<TxStatus | null>(null);
+    const [depositResponse, setDepositResponse] = useState<DepositResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const startDeposit = useCallback(async (payload: DepositRequest) => {
+    const startDeposit = useCallback(async (payload: DepositRequest): Promise<DepositResponse> => {
         setError(null);
         setLoading(true);
         setStatus("PENDING");
         try {
-            const { transactionId: newTxId } = await createDeposit(payload);
-            setTxId(newTxId);
+            const response = await createDeposit(payload);
+            setTxId(response.transactionId);
+            setDepositResponse(response);
+            return response;
         } catch (e: unknown) {
             const err = e as ApiError;
-            setError(err?.response?.data?.error || err.message || "Failed to create deposit");
+            const errMsg = typeof err?.response?.data?.error === 'string'
+                ? err.response.data.error
+                : err?.response?.data?.error?.message ?? err.message ?? "Failed to create deposit";
+            setError(errMsg);
             setStatus(null);
+            throw e;
         } finally {
             setLoading(false);
         }
     }, []);
 
+    // Poll transaction status
     useEffect(() => {
         if (!txId) return;
         const tick = async () => {
             try {
                 const txStatus = await getTxStatus(txId);
                 setStatus(txStatus);
-                if (txStatus === "PENDING") {
-                    timer.current = setTimeout(tick, 1500);
+                if (txStatus === "PENDING" || txStatus === "PROCESSING") {
+                    timer.current = setTimeout(tick, 2000);
                 }
             } catch (e: unknown) {
                 const err = e as ApiError;
-                setError(err?.response?.data?.error || err.message || "Status error");
+                const errMsg = typeof err?.response?.data?.error === 'string'
+                    ? err.response.data.error
+                    : err?.response?.data?.error?.message ?? err.message ?? "Status error";
+                setError(errMsg);
             }
         };
         tick();
@@ -47,5 +58,5 @@ export function useDeposit() {
         };
     }, [txId]);
 
-    return { txId, status, loading, error, startDeposit };
+    return { txId, status, loading, error, depositResponse, startDeposit };
 }
