@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from './auth.config';
 import { ApiResponse } from '../../shared/types';
 
@@ -21,7 +22,7 @@ export async function authMiddleware(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const session = await auth.api.getSession({ headers: req.headers as any });
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
 
     if (!session) {
       res.status(401).json({

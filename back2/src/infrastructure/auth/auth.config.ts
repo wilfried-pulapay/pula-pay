@@ -1,17 +1,56 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { phoneNumber } from 'better-auth/plugins';
+import { expo } from '@better-auth/expo';
+import { bearer } from 'better-auth/plugins';
 import { prisma } from '../persistence/prisma/client';
 import { config } from '../../shared/config';
 import { logger } from '../../shared/utils/logger';
+
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   basePath: '/api/auth',
   secret: config.betterAuth.secret,
   baseURL: config.betterAuth.url,
+  trustedOrigins: ['pulapay://', 'exp://**', 'http://192.168.1.76:3000'],
 
-  emailAndPassword: { enabled: false },
+  onAPIError: {
+    onError: (error, _ctx) => {
+      logger.warn(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+        'Better-auth API error',
+      );
+    },
+  },
+
+  hooks: {
+    after: async (ctx) => {
+      const status = (ctx as any).response?.status as number | undefined;
+      if (status && status >= 400) {
+        let body: unknown;
+        try {
+          body = await (ctx as any).response?.clone().json();
+        } catch {
+          body = await (ctx as any).response?.clone().text().catch(() => '<unreadable>');
+        }
+        logger.warn(
+          {
+            path: (ctx as any).request?.url,
+            method: (ctx as any).request?.method,
+            status,
+            body,
+          },
+          'Auth request failed',
+        );
+      }
+      return {};
+    },
+  },
+
+  emailAndPassword: { enabled: true, autoSignIn: true },
 
   socialProviders: {
     ...(config.socialProviders.google.clientId && config.socialProviders.google.clientSecret
@@ -35,28 +74,38 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       enabled: true,
-      trustedProviders: ['google', 'apple'],
+      trustedProviders: ['google', 'apple', 'credential'],
     },
   },
 
-  plugins: [
-    phoneNumber({
-      sendOTP: async ({ phoneNumber: phone, code }, _ctx) => {
-        // TODO: Integrate with SMS provider (Twilio, etc.)
-        logger.info({ phone, code }, 'OTP sent (dev mode — logged to console)');
+  plugins: [expo(), bearer()],
+
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          // Circle user registration is a lightweight, idempotent call.
+          // Wallet setup (PIN) is initiated explicitly by the mobile after registration.
+          try {
+            const { CircleWalletAdapter } = await import('../adapters/circle/CircleWalletAdapter');
+            const circleAdapter = new CircleWalletAdapter();
+            await circleAdapter.registerUser(user.id);
+            logger.info({ userId: user.id }, 'Circle user registered after registration');
+          } catch (err) {
+            logger.error({ userId: user.id, err }, 'Failed to register Circle user after registration');
+          }
+        },
       },
-      signUpOnVerification: {
-        getTempEmail: (phone) => `${phone}@pulapay.app`,
-        getTempName: (phone) => phone,
-      },
-      otpLength: 6,
-      expiresIn: 300,
-    }),
-  ],
+    },
+  },
 
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes
+    },
   },
 
   user: {

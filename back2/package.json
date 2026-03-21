@@ -29,6 +29,8 @@
   "author": "Wilfried HOUENOU",
   "license": "PROPRIETARY",
   "dependencies": {
+    "@better-auth/core": "^1.4.19",
+    "@better-auth/expo": "^1.4.19",
     "@circle-fin/user-controlled-wallets": "^2.0.0",
     "@prisma/client": "^5.9.0",
     "axios": "^1.6.7",
