@@ -19,19 +19,21 @@ pula-pay/
 
 ### Backend (`back2/`)
 
-| Category        | Technology                          |
-|-----------------|-------------------------------------|
-| Framework       | Express.js                          |
-| Language        | TypeScript (strict mode)            |
-| Database        | PostgreSQL + Prisma ORM             |
-| Blockchain      | Circle Programmable Wallets         |
-| Payment         | Coinbase CDP Onramp/Offramp API     |
-| Exchange Rates  | CoinGecko API (cached)              |
-| Auth            | JWT + bcrypt                        |
-| Validation      | Zod                                 |
-| Logging         | Pino                                |
-| Testing         | Jest                                |
-| Math Precision  | Decimal.js                          |
+| Category        | Technology                                      |
+|-----------------|-------------------------------------------------|
+| Framework       | Express.js                                      |
+| Language        | TypeScript (strict mode)                        |
+| Database        | PostgreSQL + Prisma ORM                         |
+| Blockchain      | Circle User-Controlled Wallets (Base network)   |
+| Payment         | Coinbase CDP Onramp/Offramp API                 |
+| Exchange Rates  | CoinGecko API (cached)                          |
+| Auth            | Better Auth (email/password + Google OAuth)     |
+| State Machines  | XState                                          |
+| Job Queue       | BullMQ + Redis                                  |
+| Validation      | Zod                                             |
+| Logging         | Pino                                            |
+| Testing         | Jest                                            |
+| Math Precision  | Decimal.js                                      |
 
 ### Mobile (`mobile/`)
 
@@ -91,7 +93,8 @@ mobile/src/
 ## Features
 
 ### Wallet Management
-- Create Circle-managed USDC wallets on blockchain (Polygon Amoy, Ethereum Sepolia, Arbitrum Sepolia)
+- Circle **User-Controlled** USDC wallets on **Base** (Base Sepolia testnet / Base mainnet)
+- Users hold their own private keys via PIN secured by Circle SDK
 - Real-time balance tracking in USDC with fiat display conversion
 - Wallet address sharing via QR code
 
@@ -109,6 +112,7 @@ mobile/src/
 ### Peer-to-Peer Transfers
 - Send USDC to other users by phone number or wallet address
 - Recipient lookup and validation
+- Circle **PIN challenge** flow: transfer is initiated by backend, signed by user on mobile
 - Free transfers (no fees)
 
 ### Transaction Tracking
@@ -117,8 +121,9 @@ mobile/src/
 - Real-time status polling (2s intervals on mobile)
 
 ### Authentication & KYC
-- Phone-based registration with OTP verification
-- JWT authentication with automatic token refresh
+- Email/password registration + Google OAuth via **Better Auth**
+- Session token stored natively (iOS Keychain / Android Keystore)
+- Automatic wallet setup (Circle PIN) triggered on first registration
 - Progressive KYC levels with transaction limits:
   - NONE: $0/day
   - BASIC: $100/day
@@ -142,16 +147,15 @@ mobile/src/
 
 ## API Endpoints
 
-### Auth
-| Method | Endpoint             | Description              |
-|--------|----------------------|--------------------------|
-| POST   | /auth/register       | Register new user        |
-| POST   | /auth/login          | Login with phone/password|
-| POST   | /auth/request-otp    | Request OTP              |
-| POST   | /auth/verify-otp     | Verify OTP               |
-| POST   | /auth/refresh        | Refresh access token     |
-| GET    | /auth/me             | Get current user         |
-| PATCH  | /auth/me             | Update preferences       |
+### Auth — Better Auth
+| Method | Endpoint                        | Description                      |
+|--------|---------------------------------|----------------------------------|
+| POST   | /api/auth/sign-up/email         | Register (email + password)      |
+| POST   | /api/auth/sign-in/email         | Login (email + password)         |
+| POST   | /api/auth/sign-in/social        | Google OAuth                     |
+| GET    | /api/auth/get-session           | Get current session + user       |
+| POST   | /api/auth/sign-out              | Logout                           |
+| PATCH  | /users/me/preferences           | Update display currency          |
 
 ### Exchange Rates
 | Method | Endpoint                     | Description          |
@@ -160,21 +164,20 @@ mobile/src/
 | GET    | /exchange-rates/preview      | Conversion preview   |
 
 ### Wallet (Protected)
-| Method | Endpoint                     | Description                  |
-|--------|------------------------------|------------------------------|
-| POST   | /wallet                      | Create wallet                |
-| GET    | /wallet/address              | Get wallet address           |
-| GET    | /wallet/balance              | Get balance                  |
-| POST   | /wallet/sync-status          | Sync with Circle             |
-| POST   | /wallet/deposit              | Initiate Coinbase onramp     |
-| POST   | /wallet/withdraw             | Initiate Coinbase offramp    |
-| GET    | /wallet/onramp-quote         | Preview onramp fees          |
-| GET    | /wallet/offramp-quote        | Preview offramp fees         |
-| POST   | /wallet/transfer             | P2P transfer (on-chain)      |
-| POST   | /wallet/transferable         | P2P transfer (ledger)        |
-| GET    | /wallet/resolve-recipient    | Resolve recipient            |
-| GET    | /wallet/transactions         | Transaction history          |
-| GET    | /wallet/transactions/:txId   | Transaction details          |
+| Method | Endpoint                     | Description                                              |
+|--------|------------------------------|----------------------------------------------------------|
+| POST   | /wallet                      | Initiate wallet setup — returns Circle challenge         |
+| POST   | /wallet/confirm-setup        | Confirm wallet after PIN resolved on mobile              |
+| GET    | /wallet/me                   | Get wallet info                                          |
+| GET    | /wallet/address              | Get wallet address                                       |
+| GET    | /wallet/balance              | Get balance                                              |
+| POST   | /wallet/sync-status          | Sync wallet status with Circle                           |
+| POST   | /wallet/deposit              | Initiate Coinbase CDP onramp                             |
+| POST   | /wallet/withdraw             | Initiate Coinbase CDP offramp                            |
+| POST   | /wallet/transferable         | Initiate P2P transfer — returns Circle challenge         |
+| GET    | /wallet/resolve-recipient    | Resolve recipient by phone                               |
+| GET    | /wallet/transactions         | Transaction history                                      |
+| GET    | /wallet/transactions/:txId   | Transaction details                                      |
 
 ### Webhooks
 | Method | Endpoint              | Description                |
@@ -208,16 +211,18 @@ Core tables managed by Prisma:
 - PostgreSQL 16 with health checks and persistent volumes
 
 **Supported Blockchains:**
-- Polygon Amoy (testnet, default)
-- Ethereum Sepolia (testnet)
-- Arbitrum Sepolia (testnet)
-- Mainnet equivalents ready
+- Base Sepolia (testnet, default)
+- Base (mainnet)
 
 ## Key Design Decisions
 
+- **User-Controlled Wallets** — Users hold their own private keys via PIN/biometrics. Every signing operation goes through a Circle challenge resolved on mobile.
+- **Circle Challenge Flow** — Backend initiates operations (wallet setup, transfer) and returns a `challengeId`. Mobile resolves the challenge via Circle Web SDK (WebView) before the operation executes.
+- **Two-step wallet creation** — `POST /wallet` returns a challenge; `POST /wallet/confirm-setup` completes it after PIN setup. Prevents orphan wallet records.
 - **Idempotency** — Every command uses idempotency keys to prevent duplicate processing
 - **Atomic transactions** — Wallet balance updates + ledger entries in a single Prisma transaction
-- **State machine** — Transactions follow strict valid state transitions
+- **State machine (XState)** — Transactions follow strict valid state transitions managed by XState machines
+- **BullMQ polling** — Background job queue (Redis-backed) for Coinbase CDP onramp/offramp status polling
 - **Polling fallback** — If Coinbase CDP webhooks don't arrive, background polling completes transactions
 - **Decimal precision** — All financial math uses Decimal.js (6 decimals for USDC, 2 for fiat)
 - **Secure storage** — Mobile tokens stored in iOS Keychain / Android Keystore
