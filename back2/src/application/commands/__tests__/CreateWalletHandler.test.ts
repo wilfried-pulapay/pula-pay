@@ -5,7 +5,7 @@ import {
   createMockWalletRepository,
 } from '../../../__tests__/mocks/repositories.mock';
 import { createMockWalletProvider } from '../../../__tests__/mocks/adapters.mock';
-import { createWallet, userFixtures, walletFixtures } from '../../../__tests__/fixtures';
+import { userFixtures, walletFixtures } from '../../../__tests__/fixtures';
 
 describe('CreateWalletHandler', () => {
   let handler: CreateWalletHandler;
@@ -13,256 +13,151 @@ describe('CreateWalletHandler', () => {
   let mockWalletRepo: ReturnType<typeof createMockWalletRepository>;
   let mockWalletProvider: ReturnType<typeof createMockWalletProvider>;
 
+  const mockTokenResult = {
+    userToken: 'user-token-abc',
+    encryptionKey: 'enc-key-xyz',
+  };
+  const mockChallengeResult = { challengeId: 'challenge-123' };
+  const APP_ID = 'circle-app-id';
+
   beforeEach(() => {
     mockUserRepo = createMockUserRepository();
     mockWalletRepo = createMockWalletRepository();
     mockWalletProvider = createMockWalletProvider();
 
     handler = new CreateWalletHandler(mockUserRepo, mockWalletRepo, mockWalletProvider);
+
+    // Default happy-path mocks
+    mockWalletProvider.registerUser.mockResolvedValue(undefined);
+    mockWalletProvider.getUserToken.mockResolvedValue(mockTokenResult);
+    mockWalletProvider.initiateWalletSetup.mockResolvedValue(mockChallengeResult);
+
+    // Silence config.circle.appId by injecting via jest.mock or relying on the returned value
+    jest.mock('../../../shared/config', () => ({
+      config: { circle: { appId: APP_ID }, blockchain: { default: 'BASE_SEPOLIA' } },
+    }));
   });
 
-  describe('execute', () => {
-    it('should create wallet for existing user', async () => {
-      // Arrange
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('execute — new user, no existing wallet', () => {
+    it('should register user, get token and initiate wallet setup', async () => {
       const user = userFixtures.basicKyc();
-      const command: CreateWalletCommand = {
-        userId: user.id,
-        blockchain: 'POLYGON_AMOY',
-      };
+      const command: CreateWalletCommand = { userId: user.id };
 
       mockUserRepo.findById.mockResolvedValue(user);
       mockWalletRepo.findByUserId.mockResolvedValue(null);
-      mockWalletProvider.createWallet.mockResolvedValue({
-        circleWalletId: 'circle-wallet-123',
-        walletSetId: 'wallet-set-123',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        status: 'active',
-      });
-      mockWalletRepo.create.mockResolvedValue(
-        createWallet({
-          id: 'wallet-new',
-          userId: user.id,
-          address: '0x1234567890abcdef1234567890abcdef12345678',
-          blockchain: 'POLYGON_AMOY',
-        })
-      );
 
-      // Act
       const result = await handler.execute(command);
 
-      // Assert
-      expect(result.walletId).toBe('wallet-new');
-      expect(result.address).toBe('0x1234567890abcdef1234567890abcdef12345678');
-      expect(result.blockchain).toBe('POLYGON_AMOY');
-      expect(result.status).toBe('active');
-      expect(mockWalletProvider.createWallet).toHaveBeenCalledWith(
+      expect(mockUserRepo.findById).toHaveBeenCalledWith(user.id);
+      expect(mockWalletProvider.registerUser).toHaveBeenCalledWith(user.id);
+      expect(mockWalletProvider.getUserToken).toHaveBeenCalledWith(user.id);
+      expect(mockWalletProvider.initiateWalletSetup).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: user.id,
-          blockchain: 'POLYGON_AMOY',
+          userToken: mockTokenResult.userToken,
         })
+      );
+
+      expect(result.challengeId).toBe('challenge-123');
+      expect(result.userToken).toBe(mockTokenResult.userToken);
+      expect(result.encryptionKey).toBe(mockTokenResult.encryptionKey);
+      expect(result.appId).toBeDefined();
+    });
+
+    it('should pass blockchain to initiateWalletSetup when specified', async () => {
+      const user = userFixtures.basicKyc();
+      const command: CreateWalletCommand = { userId: user.id, blockchain: 'BASE_SEPOLIA' };
+
+      mockUserRepo.findById.mockResolvedValue(user);
+      mockWalletRepo.findByUserId.mockResolvedValue(null);
+
+      await handler.execute(command);
+
+      expect(mockWalletProvider.initiateWalletSetup).toHaveBeenCalledWith(
+        expect.objectContaining({ blockchain: 'BASE_SEPOLIA' })
       );
     });
 
-    it('should throw UserNotFoundError when user does not exist', async () => {
-      // Arrange
-      const command: CreateWalletCommand = {
-        userId: 'non-existent-user',
-      };
+    it('should pass idempotencyKey to initiateWalletSetup when provided', async () => {
+      const user = userFixtures.basicKyc();
+      const idempotencyKey = 'custom-key-001';
+      const command: CreateWalletCommand = { userId: user.id, idempotencyKey };
 
-      mockUserRepo.findById.mockResolvedValue(null);
+      mockUserRepo.findById.mockResolvedValue(user);
+      mockWalletRepo.findByUserId.mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(handler.execute(command)).rejects.toThrow(UserNotFoundError);
-      expect(mockWalletRepo.findByUserId).not.toHaveBeenCalled();
-      expect(mockWalletProvider.createWallet).not.toHaveBeenCalled();
+      await handler.execute(command);
+
+      expect(mockWalletProvider.initiateWalletSetup).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey })
+      );
     });
 
-    it('should return existing wallet if already created (idempotent)', async () => {
-      // Arrange
+    it('should not call walletRepo.create — wallet is created after challenge resolution', async () => {
+      const user = userFixtures.basicKyc();
+      mockUserRepo.findById.mockResolvedValue(user);
+      mockWalletRepo.findByUserId.mockResolvedValue(null);
+
+      await handler.execute({ userId: user.id });
+
+      expect(mockWalletRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('execute — wallet already exists', () => {
+    it('should return fresh userToken without re-registering or re-creating wallet', async () => {
       const user = userFixtures.basicKyc();
       const existingWallet = walletFixtures.activeWithBalance();
-      const command: CreateWalletCommand = {
-        userId: user.id,
-      };
+      const command: CreateWalletCommand = { userId: user.id };
 
       mockUserRepo.findById.mockResolvedValue(user);
       mockWalletRepo.findByUserId.mockResolvedValue(existingWallet);
 
-      // Act
       const result = await handler.execute(command);
 
-      // Assert
-      expect(result.walletId).toBe(existingWallet.id);
-      expect(result.address).toBe(existingWallet.address);
-      expect(result.status).toBe('active');
-      expect(mockWalletProvider.createWallet).not.toHaveBeenCalled();
+      // Should NOT register again or initiate setup
+      expect(mockWalletProvider.registerUser).not.toHaveBeenCalled();
+      expect(mockWalletProvider.initiateWalletSetup).not.toHaveBeenCalled();
       expect(mockWalletRepo.create).not.toHaveBeenCalled();
+
+      // Should return fresh token with empty challengeId
+      expect(mockWalletProvider.getUserToken).toHaveBeenCalledWith(user.id);
+      expect(result.challengeId).toBe('');
+      expect(result.userToken).toBe(mockTokenResult.userToken);
+      expect(result.encryptionKey).toBe(mockTokenResult.encryptionKey);
+    });
+  });
+
+  describe('execute — error cases', () => {
+    it('should throw UserNotFoundError when user does not exist', async () => {
+      const command: CreateWalletCommand = { userId: 'non-existent' };
+      mockUserRepo.findById.mockResolvedValue(null);
+
+      await expect(handler.execute(command)).rejects.toThrow(UserNotFoundError);
+      expect(mockWalletProvider.registerUser).not.toHaveBeenCalled();
     });
 
-    it('should return pending status for pending wallet', async () => {
-      // Arrange
+    it('should propagate error from registerUser', async () => {
       const user = userFixtures.basicKyc();
-      const pendingWallet = walletFixtures.pending();
-      const command: CreateWalletCommand = {
-        userId: user.id,
-      };
-
-      mockUserRepo.findById.mockResolvedValue(user);
-      mockWalletRepo.findByUserId.mockResolvedValue(pendingWallet);
-
-      // Act
-      const result = await handler.execute(command);
-
-      // Assert
-      expect(result.status).toBe('pending');
-    });
-
-    it('should use default blockchain when not specified', async () => {
-      // Arrange
-      const user = userFixtures.basicKyc();
-      const command: CreateWalletCommand = {
-        userId: user.id,
-        // No blockchain specified
-      };
-
       mockUserRepo.findById.mockResolvedValue(user);
       mockWalletRepo.findByUserId.mockResolvedValue(null);
-      mockWalletProvider.createWallet.mockResolvedValue({
-        circleWalletId: 'circle-wallet-123',
-        walletSetId: 'wallet-set-123',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        status: 'active',
-      });
-      mockWalletRepo.create.mockResolvedValue(
-        createWallet({
-          id: 'wallet-new',
-          userId: user.id,
-        })
-      );
+      mockWalletProvider.registerUser.mockRejectedValue(new Error('Circle error'));
 
-      // Act
-      await handler.execute(command);
-
-      // Assert
-      expect(mockWalletProvider.createWallet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          blockchain: expect.any(String), // Default blockchain from config
-        })
-      );
+      await expect(handler.execute({ userId: user.id })).rejects.toThrow('Circle error');
+      expect(mockWalletProvider.initiateWalletSetup).not.toHaveBeenCalled();
     });
 
-    it('should use provided idempotencyKey', async () => {
-      // Arrange
+    it('should propagate error from getUserToken', async () => {
       const user = userFixtures.basicKyc();
-      const idempotencyKey = 'custom-idempotency-key-123';
-      const command: CreateWalletCommand = {
-        userId: user.id,
-        idempotencyKey,
-      };
-
       mockUserRepo.findById.mockResolvedValue(user);
       mockWalletRepo.findByUserId.mockResolvedValue(null);
-      mockWalletProvider.createWallet.mockResolvedValue({
-        circleWalletId: 'circle-wallet-123',
-        walletSetId: 'wallet-set-123',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        status: 'active',
-      });
-      mockWalletRepo.create.mockResolvedValue(
-        createWallet({
-          id: 'wallet-new',
-          userId: user.id,
-        })
-      );
+      mockWalletProvider.getUserToken.mockRejectedValue(new Error('Token error'));
 
-      // Act
-      await handler.execute(command);
-
-      // Assert
-      expect(mockWalletProvider.createWallet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          idempotencyKey,
-        })
-      );
-    });
-
-    it('should use specific blockchain when provided', async () => {
-      // Arrange
-      const user = userFixtures.basicKyc();
-      const command: CreateWalletCommand = {
-        userId: user.id,
-        blockchain: 'ETH_SEPOLIA',
-      };
-
-      mockUserRepo.findById.mockResolvedValue(user);
-      mockWalletRepo.findByUserId.mockResolvedValue(null);
-      mockWalletProvider.createWallet.mockResolvedValue({
-        circleWalletId: 'circle-wallet-123',
-        walletSetId: 'wallet-set-123',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        status: 'active',
-      });
-      mockWalletRepo.create.mockResolvedValue(
-        createWallet({
-          id: 'wallet-new',
-          userId: user.id,
-          blockchain: 'ETH_SEPOLIA',
-        })
-      );
-
-      // Act
-      const result = await handler.execute(command);
-
-      // Assert
-      expect(result.blockchain).toBe('ETH_SEPOLIA');
-      expect(mockWalletProvider.createWallet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          blockchain: 'ETH_SEPOLIA',
-        })
-      );
-    });
-
-    it('should persist wallet with Circle data', async () => {
-      // Arrange
-      const user = userFixtures.basicKyc();
-      const command: CreateWalletCommand = {
-        userId: user.id,
-        blockchain: 'POLYGON_AMOY',
-      };
-
-      const circleData = {
-        circleWalletId: 'circle-wallet-abc',
-        walletSetId: 'wallet-set-xyz',
-        address: '0xabcdef1234567890abcdef1234567890abcdef12',
-        status: 'active' as const,
-      };
-
-      mockUserRepo.findById.mockResolvedValue(user);
-      mockWalletRepo.findByUserId.mockResolvedValue(null);
-      mockWalletProvider.createWallet.mockResolvedValue(circleData);
-      mockWalletRepo.create.mockResolvedValue(
-        createWallet({
-          id: 'wallet-new',
-          userId: user.id,
-          circleWalletId: circleData.circleWalletId,
-          walletSetId: circleData.walletSetId,
-          address: circleData.address,
-        })
-      );
-
-      // Act
-      await handler.execute(command);
-
-      // Assert
-      expect(mockWalletRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: user.id,
-          circleWalletId: circleData.circleWalletId,
-          walletSetId: circleData.walletSetId,
-          address: circleData.address,
-          blockchain: 'POLYGON_AMOY',
-        })
-      );
+      await expect(handler.execute({ userId: user.id })).rejects.toThrow('Token error');
     });
   });
 });

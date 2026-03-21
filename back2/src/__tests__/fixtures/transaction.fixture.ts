@@ -23,6 +23,7 @@ export const createTransactionProps = (
   createdAt: new Date('2026-01-01T10:00:00.000Z'),
   updatedAt: new Date('2026-01-01T10:00:00.000Z'),
   completedAt: null,
+  challengeId: null,
   ...overrides,
 });
 

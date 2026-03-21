@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 
 // Mock handlers
 const mockCreateWalletHandler = { execute: jest.fn() };
+const mockConfirmWalletSetupHandler = { execute: jest.fn() };
 const mockDepositHandler = { execute: jest.fn() };
 const mockWithdrawHandler = { execute: jest.fn() };
 const mockTransferHandler = { execute: jest.fn() };
@@ -24,6 +25,7 @@ describe('WalletController', () => {
   beforeEach(() => {
     controller = new WalletController(
       mockCreateWalletHandler as any,
+      mockConfirmWalletSetupHandler as any,
       mockDepositHandler as any,
       mockWithdrawHandler as any,
       mockTransferHandler as any,
@@ -56,42 +58,53 @@ describe('WalletController', () => {
   });
 
   describe('createWallet', () => {
-    it('should create wallet and return 201', async () => {
+    const challengeResponse = {
+      challengeId: 'challenge-abc',
+      userToken: 'user-token-xyz',
+      encryptionKey: 'enc-key-123',
+      appId: 'circle-app-id',
+    };
+
+    it('should initiate wallet setup and return 202 with challenge data', async () => {
       // Arrange
-      mockReq.body = { blockchain: 'POLYGON_AMOY' };
-      mockCreateWalletHandler.execute.mockResolvedValue({
-        walletId: 'wallet-123',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        blockchain: 'POLYGON_AMOY',
-        status: 'active',
-      });
+      mockReq.body = { blockchain: 'BASE_SEPOLIA' };
+      mockCreateWalletHandler.execute.mockResolvedValue(challengeResponse);
 
       // Act
       await controller.createWallet(mockReq as Request, mockRes as Response, mockNext);
 
       // Assert
-      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.status).toHaveBeenCalledWith(202);
       expect(mockRes.json).toHaveBeenCalledWith({
         success: true,
         data: expect.objectContaining({
-          walletId: 'wallet-123',
-          address: '0x1234567890abcdef1234567890abcdef12345678',
+          challengeId: 'challenge-abc',
+          userToken: 'user-token-xyz',
+          encryptionKey: 'enc-key-123',
         }),
-        meta: expect.objectContaining({
-          requestId: 'req-123',
-        }),
+        meta: expect.objectContaining({ requestId: 'req-123' }),
       });
     });
 
-    it('should create wallet with default blockchain when not specified', async () => {
+    it('should pass userId and blockchain to the handler', async () => {
+      // Arrange
+      mockReq.body = { blockchain: 'BASE_SEPOLIA' };
+      mockCreateWalletHandler.execute.mockResolvedValue(challengeResponse);
+
+      // Act
+      await controller.createWallet(mockReq as Request, mockRes as Response, mockNext);
+
+      // Assert
+      expect(mockCreateWalletHandler.execute).toHaveBeenCalledWith({
+        userId: 'user-123',
+        blockchain: 'BASE_SEPOLIA',
+      });
+    });
+
+    it('should pass undefined blockchain when not specified', async () => {
       // Arrange
       mockReq.body = {};
-      mockCreateWalletHandler.execute.mockResolvedValue({
-        walletId: 'wallet-123',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        blockchain: 'POLYGON_AMOY',
-        status: 'active',
-      });
+      mockCreateWalletHandler.execute.mockResolvedValue(challengeResponse);
 
       // Act
       await controller.createWallet(mockReq as Request, mockRes as Response, mockNext);
@@ -101,7 +114,6 @@ describe('WalletController', () => {
         userId: 'user-123',
         blockchain: undefined,
       });
-      expect(mockRes.status).toHaveBeenCalledWith(201);
     });
 
     it('should call next with error when handler throws', async () => {
@@ -117,7 +129,7 @@ describe('WalletController', () => {
       expect(mockNext).toHaveBeenCalledWith(error);
     });
 
-    it('should reject invalid blockchain', async () => {
+    it('should reject invalid blockchain value', async () => {
       // Arrange
       mockReq.body = { blockchain: 'INVALID_CHAIN' };
 
@@ -126,6 +138,76 @@ describe('WalletController', () => {
 
       // Assert
       expect(mockNext).toHaveBeenCalledWith(expect.any(ZodError));
+    });
+  });
+
+  describe('confirmWalletSetup', () => {
+    const confirmResponse = {
+      walletId: 'wallet-123',
+      address: '0x1234567890abcdef1234567890abcdef12345678',
+      blockchain: 'BASE_SEPOLIA',
+      status: 'active',
+    };
+
+    it('should confirm wallet setup and return 201', async () => {
+      // Arrange
+      mockReq.body = { userToken: 'user-token-xyz' };
+      mockConfirmWalletSetupHandler.execute.mockResolvedValue(confirmResponse);
+
+      // Act
+      await controller.confirmWalletSetup(mockReq as Request, mockRes as Response, mockNext);
+
+      // Assert
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          walletId: 'wallet-123',
+          address: expect.any(String),
+          status: 'active',
+        }),
+        meta: expect.any(Object),
+      });
+    });
+
+    it('should pass userId and userToken to the handler', async () => {
+      // Arrange
+      mockReq.body = { userToken: 'user-token-xyz', blockchain: 'BASE_SEPOLIA' };
+      mockConfirmWalletSetupHandler.execute.mockResolvedValue(confirmResponse);
+
+      // Act
+      await controller.confirmWalletSetup(mockReq as Request, mockRes as Response, mockNext);
+
+      // Assert
+      expect(mockConfirmWalletSetupHandler.execute).toHaveBeenCalledWith({
+        userId: 'user-123',
+        userToken: 'user-token-xyz',
+        blockchain: 'BASE_SEPOLIA',
+      });
+    });
+
+    it('should reject request with missing userToken', async () => {
+      // Arrange
+      mockReq.body = {};
+
+      // Act
+      await controller.confirmWalletSetup(mockReq as Request, mockRes as Response, mockNext);
+
+      // Assert
+      expect(mockNext).toHaveBeenCalledWith(expect.any(ZodError));
+    });
+
+    it('should call next with error when handler throws', async () => {
+      // Arrange
+      mockReq.body = { userToken: 'token' };
+      const error = new Error('Circle error');
+      mockConfirmWalletSetupHandler.execute.mockRejectedValue(error);
+
+      // Act
+      await controller.confirmWalletSetup(mockReq as Request, mockRes as Response, mockNext);
+
+      // Assert
+      expect(mockNext).toHaveBeenCalledWith(error);
     });
   });
 

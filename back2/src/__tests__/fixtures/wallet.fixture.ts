@@ -6,9 +6,9 @@ export const createWalletProps = (overrides: Partial<WalletProps> = {}): WalletP
   id: 'wallet-test-id-001',
   userId: 'user-test-id-001',
   circleWalletId: 'circle-wallet-uuid-001',
-  walletSetId: 'circle-wallet-set-uuid',
+  walletSetId: null,
   address: '0x1234567890abcdef1234567890abcdef12345678',
-  blockchain: 'POLYGON_AMOY' as Blockchain,
+  blockchain: 'BASE_SEPOLIA' as Blockchain,
   status: 'ACTIVE' as WalletStatus,
   balanceUsdc: new Decimal('100.000000'),
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -60,11 +60,11 @@ export const walletFixtures = {
       balanceUsdc: new Decimal('0'),
     }),
 
-  // Wallet on different blockchain
-  ethereumSepolia: (): Wallet =>
+  // Wallet on Base mainnet
+  baseMainnet: (): Wallet =>
     createWallet({
-      id: 'wallet-eth-sepolia',
-      blockchain: 'ETH_SEPOLIA',
+      id: 'wallet-base',
+      blockchain: 'BASE',
       address: '0xabcdef1234567890abcdef1234567890abcdef12',
     }),
 

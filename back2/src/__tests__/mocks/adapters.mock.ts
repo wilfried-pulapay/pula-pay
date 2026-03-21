@@ -2,11 +2,8 @@ import Decimal from 'decimal.js';
 import { Currency, OnRampProvider as Provider } from '@prisma/client';
 import {
   WalletProvider,
-  CreateWalletParams,
-  WalletCreationResult,
   WalletBalance,
   WalletDetails,
-  TransferParams,
   TransferResult,
   EstimateFeeParams,
 } from '@domain/ports/WalletProvider';
@@ -23,13 +20,16 @@ import {
 } from '@domain/ports/ExchangeRateProvider';
 
 /**
- * Mock Wallet Provider (Circle)
+ * Mock Wallet Provider (Circle User-Controlled)
  */
 export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
-  createWallet: jest.fn(),
+  registerUser: jest.fn(),
+  getUserToken: jest.fn(),
+  initiateWalletSetup: jest.fn(),
+  getWalletsForUser: jest.fn(),
   getWallet: jest.fn(),
   getBalance: jest.fn(),
-  transfer: jest.fn(),
+  initiateTransfer: jest.fn(),
   getTransferStatus: jest.fn(),
   estimateFee: jest.fn(),
 });
@@ -55,25 +55,41 @@ export const createMockExchangeRateProvider = (): jest.Mocked<ExchangeRateProvid
 });
 
 /**
- * In-memory Wallet Provider for integration tests
+ * In-memory Wallet Provider for integration tests (User-Controlled)
  */
 export class InMemoryWalletProvider implements WalletProvider {
   private wallets: Map<string, { balance: string; address: string }> = new Map();
   private transfers: Map<string, TransferResult> = new Map();
+  private users: Set<string> = new Set();
   private idCounter = 1;
 
-  async createWallet(_params: CreateWalletParams): Promise<WalletCreationResult> {
+  async registerUser(userId: string): Promise<void> {
+    this.users.add(userId);
+  }
+
+  async getUserToken(_userId: string): Promise<{ userToken: string; encryptionKey: string }> {
+    return {
+      userToken: `user-token-${this.idCounter++}`,
+      encryptionKey: `enc-key-${this.idCounter}`,
+    };
+  }
+
+  async initiateWalletSetup(_params: unknown): Promise<{ challengeId: string }> {
+    return { challengeId: `challenge-${this.idCounter++}` };
+  }
+
+  async getWalletsForUser(_userToken: string): Promise<WalletDetails[]> {
     const circleWalletId = `circle-wallet-${this.idCounter++}`;
     const address = `0x${this.idCounter.toString(16).padStart(40, '0')}`;
-
     this.wallets.set(circleWalletId, { balance: '0', address });
-
-    return {
-      circleWalletId,
-      walletSetId: 'wallet-set-test',
+    return [{
+      id: circleWalletId,
       address,
-      status: 'active',
-    };
+      blockchain: 'BASE-SEPOLIA',
+      state: 'LIVE',
+      custodyType: 'END_USER_CONTROLLED',
+      accountType: 'SCA',
+    }];
   }
 
   async getWallet(circleWalletId: string): Promise<WalletDetails> {
@@ -81,10 +97,9 @@ export class InMemoryWalletProvider implements WalletProvider {
     return {
       id: circleWalletId,
       address: wallet?.address ?? '0x0',
-      blockchain: 'MATIC-AMOY',
+      blockchain: 'BASE-SEPOLIA',
       state: 'LIVE',
-      walletSetId: 'wallet-set-test',
-      custodyType: 'DEVELOPER',
+      custodyType: 'END_USER_CONTROLLED',
       accountType: 'SCA',
     };
   }
@@ -92,30 +107,19 @@ export class InMemoryWalletProvider implements WalletProvider {
   async getBalance(circleWalletId: string): Promise<WalletBalance> {
     const wallet = this.wallets.get(circleWalletId);
     return {
-      tokenId: '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582',
+      tokenId: 'usdc-token-base-sepolia',
       amount: wallet?.balance || '0',
-      blockchain: 'POLYGON_AMOY',
+      blockchain: 'BASE_SEPOLIA',
     };
   }
 
-  async transfer(params: TransferParams): Promise<TransferResult> {
-    const transferId = `transfer-${this.idCounter++}`;
-    const result: TransferResult = {
-      id: transferId,
-      status: 'complete',
-      txHash: `0x${transferId.padStart(64, 'a')}`,
-    };
-
-    this.transfers.set(transferId, result);
-
-    // Update balances
+  async initiateTransfer(params: { fromWalletId: string; amount: string }): Promise<{ challengeId: string }> {
     const fromWallet = this.wallets.get(params.fromWalletId);
     if (fromWallet) {
       const newBalance = new Decimal(fromWallet.balance).sub(params.amount);
       fromWallet.balance = newBalance.toString();
     }
-
-    return result;
+    return { challengeId: `challenge-transfer-${this.idCounter++}` };
   }
 
   async getTransferStatus(transferId: string): Promise<TransferResult> {
@@ -128,7 +132,7 @@ export class InMemoryWalletProvider implements WalletProvider {
   }
 
   async estimateFee(_params: EstimateFeeParams): Promise<string> {
-    return '0.001'; // Fixed gas estimate for testing
+    return '0.001';
   }
 
   // Test helpers
@@ -144,6 +148,7 @@ export class InMemoryWalletProvider implements WalletProvider {
   clear(): void {
     this.wallets.clear();
     this.transfers.clear();
+    this.users.clear();
     this.idCounter = 1;
   }
 }
