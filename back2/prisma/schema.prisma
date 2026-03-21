@@ -114,9 +114,9 @@ model Wallet {
 
   // Circle Wallet Data
   circleWalletId  String   @unique
-  walletSetId     String
+  walletSetId     String?  // Null for user-controlled wallets
   address         String   @unique
-  blockchain      Blockchain @default(POLYGON_AMOY)
+  blockchain      Blockchain @default(BASE_SEPOLIA)
 
   // State
   status          WalletStatus @default(PENDING)
@@ -139,11 +139,13 @@ model Wallet {
 }
 
 enum Blockchain {
-  // Testnets
+  // Base (primary)
+  BASE_SEPOLIA
+  BASE
+  // Legacy (kept for reference)
   POLYGON_AMOY
   ETH_SEPOLIA
   ARBITRUM_SEPOLIA
-  // Mainnets
   POLYGON
   ARBITRUM
   ETHEREUM
@@ -184,6 +186,9 @@ model Transaction {
   walletId        String
   wallet          Wallet    @relation(fields: [walletId], references: [id])
   counterpartyId  String?
+
+  // Challenge (user-controlled wallet: pending user PIN confirmation)
+  challengeId     String?
 
   // Metadata
   description     String?

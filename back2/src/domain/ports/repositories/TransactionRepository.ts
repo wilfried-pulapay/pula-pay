@@ -16,6 +16,7 @@ export interface CreateTransactionParams {
   counterpartyId?: string;
   description?: string;
   metadata?: Record<string, unknown>;
+  challengeId?: string;
 }
 
 export interface CreateOnRampDetailsParams {

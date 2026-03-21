@@ -87,6 +87,7 @@ export class PrismaTransactionRepository implements TransactionRepository {
         counterpartyId: params.counterpartyId,
         description: params.description,
         metadata: (params.metadata as Prisma.InputJsonValue) ?? undefined,
+        challengeId: params.challengeId,
       },
     });
     return this.toDomain(tx);
@@ -157,6 +158,7 @@ export class PrismaTransactionRepository implements TransactionRepository {
       description: prismaTx.description,
       metadata: prismaTx.metadata as Record<string, unknown> | null,
       failureReason: prismaTx.failureReason,
+      challengeId: prismaTx.challengeId,
       createdAt: prismaTx.createdAt,
       updatedAt: prismaTx.updatedAt,
       completedAt: prismaTx.completedAt,

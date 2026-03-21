@@ -19,6 +19,7 @@ export interface TransactionProps {
   description: string | null;
   metadata: Record<string, unknown> | null;
   failureReason: string | null;
+  challengeId: string | null;
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
@@ -75,6 +76,9 @@ export class Transaction {
   }
   get failureReason(): string | null {
     return this.props.failureReason;
+  }
+  get challengeId(): string | null {
+    return this.props.challengeId;
   }
   get createdAt(): Date {
     return this.props.createdAt;

@@ -42,7 +42,7 @@ export class PrismaWalletRepository implements WalletRepository {
       data: {
         userId: params.userId,
         circleWalletId: params.circleWalletId,
-        walletSetId: params.walletSetId,
+        walletSetId: params.walletSetId ?? null,
         address: params.address.toLowerCase(),
         blockchain: params.blockchain,
         status: 'PENDING',
@@ -76,7 +76,7 @@ export class PrismaWalletRepository implements WalletRepository {
       id: prismaWallet.id,
       userId: prismaWallet.userId,
       circleWalletId: prismaWallet.circleWalletId,
-      walletSetId: prismaWallet.walletSetId,
+      walletSetId: prismaWallet.walletSetId ?? null,
       address: prismaWallet.address,
       blockchain: prismaWallet.blockchain,
       status: prismaWallet.status,

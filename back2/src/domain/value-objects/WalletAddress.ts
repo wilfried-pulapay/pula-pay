@@ -35,14 +35,11 @@ export class WalletAddress {
    * Validate address format based on blockchain
    */
   static isValid(address: string, blockchain: Blockchain): boolean {
-    // EVM-compatible chains (Polygon, Ethereum, Arbitrum)
+    // All supported chains are EVM-compatible
     const evmChains: Blockchain[] = [
-      'POLYGON_AMOY',
-      'ETH_SEPOLIA',
-      'ARBITRUM_SEPOLIA',
-      'POLYGON',
-      'ARBITRUM',
-      'ETHEREUM',
+      'BASE_SEPOLIA', 'BASE',
+      'POLYGON_AMOY', 'ETH_SEPOLIA', 'ARBITRUM_SEPOLIA',
+      'POLYGON', 'ETHEREUM', 'ARBITRUM',
     ];
 
     if (evmChains.includes(blockchain)) {
@@ -56,7 +53,7 @@ export class WalletAddress {
    * Check if this is a testnet address
    */
   isTestnet(): boolean {
-    const testnets: Blockchain[] = ['POLYGON_AMOY', 'ETH_SEPOLIA', 'ARBITRUM_SEPOLIA'];
+    const testnets: Blockchain[] = ['BASE_SEPOLIA', 'POLYGON_AMOY', 'ETH_SEPOLIA', 'ARBITRUM_SEPOLIA'];
     return testnets.includes(this.blockchain);
   }
 
@@ -73,6 +70,8 @@ export class WalletAddress {
    */
   explorerUrl(): string {
     const explorers: Record<Blockchain, string> = {
+      BASE_SEPOLIA: 'https://sepolia.basescan.org/address/',
+      BASE: 'https://basescan.org/address/',
       POLYGON_AMOY: 'https://amoy.polygonscan.com/address/',
       ETH_SEPOLIA: 'https://sepolia.etherscan.io/address/',
       ARBITRUM_SEPOLIA: 'https://sepolia.arbiscan.io/address/',

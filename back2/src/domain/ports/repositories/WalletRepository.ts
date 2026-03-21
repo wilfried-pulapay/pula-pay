@@ -5,7 +5,7 @@ import { Wallet } from '../../entities/Wallet';
 export interface CreateWalletRepoParams {
   userId: string;
   circleWalletId: string;
-  walletSetId: string;
+  walletSetId?: string | null;
   address: string;
   blockchain: Blockchain;
 }

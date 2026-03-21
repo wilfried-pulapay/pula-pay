@@ -11,7 +11,7 @@ export interface WalletProps {
   id: string;
   userId: string;
   circleWalletId: string;
-  walletSetId: string;
+  walletSetId?: string | null;
   address: string;
   blockchain: Blockchain;
   status: WalletStatus;
@@ -40,7 +40,7 @@ export class Wallet {
   get circleWalletId(): string {
     return this.props.circleWalletId;
   }
-  get walletSetId(): string {
+  get walletSetId(): string | null | undefined {
     return this.props.walletSetId;
   }
   get address(): string {
