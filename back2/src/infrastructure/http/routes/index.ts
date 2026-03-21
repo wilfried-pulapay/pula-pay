@@ -13,6 +13,7 @@ import { HealthController } from '../controllers/HealthController';
 
 // Handlers
 import { CreateWalletHandler } from '../../../application/commands/CreateWalletHandler';
+import { ConfirmWalletSetupHandler } from '../../../application/commands/ConfirmWalletSetupHandler';
 import { InitiateDepositHandler } from '../../../application/commands/InitiateDepositHandler';
 import { InitiateWithdrawalHandler } from '../../../application/commands/InitiateWithdrawalHandler';
 import { ExecuteTransferHandler } from '../../../application/commands/ExecuteTransferHandler';
@@ -45,26 +46,26 @@ import { CachedExchangeRateAdapter } from '../../adapters/exchange/CachedExchang
 import { coinbasePollingQueue, txExpiryQueue } from '../../jobs/queues';
 
 export function mountAuthRoutes(app: Express): void {
-  // Better Auth — handles all /api/auth/* routes
   app.all('/api/auth/*', authHandler);
 }
 
 export function createRouter(prisma: PrismaClient): Router {
   const router = Router();
 
-  // Initialize repositories
+  // Repositories
   const userRepo = new PrismaUserRepository(prisma);
   const walletRepo = new PrismaWalletRepository(prisma);
   const txRepo = new PrismaTransactionRepository(prisma);
 
-  // Initialize adapters
+  // Adapters
   const circleAdapter = new CircleWalletAdapter();
   const coinbaseCdpAdapter = new CoinbaseCdpOnRampAdapter();
   const coingeckoAdapter = new CoingeckoAdapter();
   const exchangeRateAdapter = new CachedExchangeRateAdapter(coingeckoAdapter);
 
-  // Initialize handlers
+  // Handlers
   const createWalletHandler = new CreateWalletHandler(userRepo, walletRepo, circleAdapter);
+  const confirmWalletSetupHandler = new ConfirmWalletSetupHandler(userRepo, walletRepo, circleAdapter);
   const depositHandler = new InitiateDepositHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter, coinbasePollingQueue, txExpiryQueue);
   const withdrawHandler = new InitiateWithdrawalHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter, coinbasePollingQueue, txExpiryQueue);
   const transferHandler = new ExecuteTransferHandler(prisma, walletRepo, txRepo, circleAdapter, exchangeRateAdapter);
@@ -82,8 +83,23 @@ export function createRouter(prisma: PrismaClient): Router {
   const offrampQuoteHandler = new GetOfframpQuoteHandler(coinbaseCdpAdapter);
   const conversionService = new CurrencyConversionService(exchangeRateAdapter);
 
-  // Initialize controllers
-  const walletController = new WalletController(createWalletHandler, depositHandler, withdrawHandler, transferHandler, simpleTransferHandler, syncWalletStatusHandler, balanceHandler, historyHandler, transactionByIdHandler, addressHandler, resolveRecipientHandler, onrampQuoteHandler, offrampQuoteHandler);
+  // Controllers
+  const walletController = new WalletController(
+    createWalletHandler,
+    confirmWalletSetupHandler,
+    depositHandler,
+    withdrawHandler,
+    transferHandler,
+    simpleTransferHandler,
+    syncWalletStatusHandler,
+    balanceHandler,
+    historyHandler,
+    transactionByIdHandler,
+    addressHandler,
+    resolveRecipientHandler,
+    onrampQuoteHandler,
+    offrampQuoteHandler
+  );
   const webhookController = new WebhookController(confirmDepositHandler, activateWalletHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue);
   const rateController = new ExchangeRateController(rateHandler, conversionService);
   const healthController = new HealthController(prisma);
@@ -102,7 +118,8 @@ export function createRouter(prisma: PrismaClient): Router {
   router.post('/webhooks/circle', webhookController.handleCircleWebhook);
 
   // Protected wallet routes
-  router.post('/wallet', authMiddleware, walletController.createWallet);
+  router.post('/wallet', authMiddleware, walletController.createWallet);               // Initiate setup (returns challenge)
+  router.post('/wallet/confirm-setup', authMiddleware, walletController.confirmWalletSetup); // Confirm after PIN
   router.get('/wallet/address', authMiddleware, walletController.getAddress);
   router.get('/wallet/balance', authMiddleware, walletController.getBalance);
   router.post('/wallet/sync-status', authMiddleware, walletController.syncWalletStatus);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Currency, TxType, TxStatus, Blockchain } from '@prisma/client';
 import { ApiResponse } from '../../../shared/types';
 import { CreateWalletHandler, CreateWalletResult } from '../../../application/commands/CreateWalletHandler';
+import { ConfirmWalletSetupHandler, ConfirmWalletSetupResult } from '../../../application/commands/ConfirmWalletSetupHandler';
 import { InitiateDepositHandler, InitiateDepositResult } from '../../../application/commands/InitiateDepositHandler';
 import { InitiateWithdrawalHandler, InitiateWithdrawalResult } from '../../../application/commands/InitiateWithdrawalHandler';
 import { ExecuteTransferHandler, TransferResult } from '../../../application/commands/ExecuteTransferHandler';
@@ -15,11 +16,15 @@ import { GetWalletAddressHandler, GetWalletAddressResult } from '../../../applic
 import { ResolveRecipientHandler, ResolveRecipientResult } from '../../../application/queries/ResolveRecipientHandler';
 import { GetOnrampQuoteHandler } from '../../../application/queries/GetOnrampQuoteHandler';
 import { GetOfframpQuoteHandler } from '../../../application/queries/GetOfframpQuoteHandler';
-import { OnrampQuoteResult } from '../../../domain/ports/QuoteProvider';
-import { OfframpQuoteResult } from '../../../domain/ports/QuoteProvider';
+import { OnrampQuoteResult, OfframpQuoteResult } from '../../../domain/ports/QuoteProvider';
 
 // Validation schemas
-const createWalletSchema = z.object({
+const blockchainSchema = z.object({
+  blockchain: z.nativeEnum(Blockchain).optional(),
+});
+
+const confirmSetupSchema = z.object({
+  userToken: z.string().min(1),
   blockchain: z.nativeEnum(Blockchain).optional(),
 });
 
@@ -31,7 +36,7 @@ const depositSchema = z.object({
 });
 
 const withdrawSchema = z.object({
-  amount: z.number().positive(),  // Amount in target currency (fiat)
+  amount: z.number().positive(),
   targetCurrency: z.nativeEnum(Currency),
   country: z.string().length(2).default('US'),
   paymentMethod: z.enum(['ACH_BANK_ACCOUNT', 'CARD']).default('ACH_BANK_ACCOUNT'),
@@ -82,6 +87,7 @@ const offrampQuoteSchema = z.object({
 export class WalletController {
   constructor(
     private readonly createWalletHandler: CreateWalletHandler,
+    private readonly confirmWalletSetupHandler: ConfirmWalletSetupHandler,
     private readonly depositHandler: InitiateDepositHandler,
     private readonly withdrawHandler: InitiateWithdrawalHandler,
     private readonly transferHandler: ExecuteTransferHandler,
@@ -96,15 +102,51 @@ export class WalletController {
     private readonly offrampQuoteHandler: GetOfframpQuoteHandler
   ) {}
 
+  /**
+   * POST /wallet
+   * Initiates wallet setup for user-controlled wallets.
+   * Returns challengeId + userToken + encryptionKey for the mobile Circle SDK.
+   */
   createWallet = async (
     req: Request,
     res: Response<ApiResponse<CreateWalletResult>>,
     next: NextFunction
   ): Promise<void> => {
     try {
-      const data = createWalletSchema.parse(req.body);
+      const data = blockchainSchema.parse(req.body);
       const result = await this.createWalletHandler.execute({
         userId: req.user!.id,
+        blockchain: data.blockchain,
+      });
+
+      res.status(202).json({
+        success: true,
+        data: result,
+        meta: {
+          requestId: req.headers['x-request-id'] as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /wallet/confirm-setup
+   * Called after the mobile resolves the Circle wallet challenge (PIN setup).
+   * Fetches the created wallet from Circle and persists it locally.
+   */
+  confirmWalletSetup = async (
+    req: Request,
+    res: Response<ApiResponse<ConfirmWalletSetupResult>>,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const data = confirmSetupSchema.parse(req.body);
+      const result = await this.confirmWalletSetupHandler.execute({
+        userId: req.user!.id,
+        userToken: data.userToken,
         blockchain: data.blockchain,
       });
 
@@ -344,7 +386,6 @@ export class WalletController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      // First get user's wallet ID
       const balanceResult = await this.balanceHandler.execute({
         userId: req.user!.id,
       });

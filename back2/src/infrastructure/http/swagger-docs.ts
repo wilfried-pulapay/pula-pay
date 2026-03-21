@@ -1,187 +1,189 @@
 // ============================================
-// AUTH ROUTES
+// AUTH ROUTES (Better Auth — base path: /api/auth)
 // ============================================
 
 /**
  * @swagger
- * /auth/register:
+ * /sign-up/email:
  *   post:
- *     summary: Register a new user
- *     description: Create a new user account with phone and password
+ *     summary: Register with email + password
+ *     description: |
+ *       Create a new account using email and password.
+ *       Auto sign-in is enabled — a session token is returned immediately.
+ *       Account linking: if the same email is later used with Google/Apple sign-in, accounts are auto-linked.
  *     tags: [Auth]
+ *     servers:
+ *       - url: http://localhost:3000/api/auth
+ *         description: Auth endpoints (dev)
+ *       - url: https://api.pulapay.com/api/auth
+ *         description: Auth endpoints (prod)
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/RegisterRequest'
+ *             $ref: '#/components/schemas/EmailSignUpRequest'
  *     responses:
- *       201:
- *         description: User registered successfully
+ *       200:
+ *         description: Account created — session token returned
+ *         headers:
+ *           Set-Cookie:
+ *             description: Session cookie (`better-auth.session_token`)
+ *             schema:
+ *               type: string
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthResponse'
+ *               $ref: '#/components/schemas/TokenResponse'
  *       400:
- *         description: Validation error
- *       409:
- *         description: Phone or email already registered
+ *         description: Invalid email or password too short
+ *       422:
+ *         description: User already exists
  */
 
 /**
  * @swagger
- * /auth/login:
+ * /sign-in/email:
  *   post:
- *     summary: Login
- *     description: Authenticate with phone and password
+ *     summary: Sign in with email + password
+ *     description: |
+ *       Authenticate using email and password.
+ *       Returns a session via `Set-Cookie` header and in the response body.
  *     tags: [Auth]
+ *     servers:
+ *       - url: http://localhost:3000/api/auth
+ *         description: Auth endpoints (dev)
+ *       - url: https://api.pulapay.com/api/auth
+ *         description: Auth endpoints (prod)
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
+ *             $ref: '#/components/schemas/EmailSignInRequest'
  *     responses:
  *       200:
- *         description: Login successful
+ *         description: Signed in — session created
+ *         headers:
+ *           Set-Cookie:
+ *             description: Session cookie (`better-auth.session_token`)
+ *             schema:
+ *               type: string
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthResponse'
+ *               $ref: '#/components/schemas/SessionResponse'
  *       401:
- *         description: Invalid credentials
+ *         description: Invalid email or password
  */
 
 /**
  * @swagger
- * /auth/request-otp:
- *   post:
- *     summary: Request OTP
- *     description: Request a one-time password for phone verification (KYC upgrade)
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RequestOtpRequest'
- *     responses:
- *       200:
- *         description: OTP sent successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/OtpResponse'
- *       404:
- *         description: User not found
- */
-
-/**
- * @swagger
- * /auth/verify-otp:
- *   post:
- *     summary: Verify OTP
- *     description: Verify OTP and upgrade KYC level to BASIC
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/VerifyOtpRequest'
- *     responses:
- *       200:
- *         description: OTP verified, KYC upgraded
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthResponse'
- *       400:
- *         description: Invalid or expired OTP
- *       404:
- *         description: User not found
- */
-
-/**
- * @swagger
- * /auth/refresh:
- *   post:
- *     summary: Refresh access token
- *     description: Get a new access token using a refresh token
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RefreshTokenRequest'
- *     responses:
- *       200:
- *         description: Tokens refreshed
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/TokenResponse'
- *       401:
- *         description: Invalid or expired refresh token
- */
-
-/**
- * @swagger
- * /auth/me:
+ * /get-session:
  *   get:
- *     summary: Get current user profile
- *     description: Returns the authenticated user's profile and KYC limits
+ *     summary: Get current session
+ *     description: Returns the current session and user profile. Requires a valid session cookie or Bearer token.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     servers:
+ *       - url: http://localhost:3000/api/auth
+ *         description: Auth endpoints (dev)
+ *       - url: https://api.pulapay.com/api/auth
+ *         description: Auth endpoints (prod)
  *     responses:
  *       200:
- *         description: Profile retrieved
+ *         description: Session retrieved
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/ProfileResponse'
+ *               $ref: '#/components/schemas/SessionResponse'
  *       401:
- *         description: Unauthorized
- *       404:
- *         description: User not found
- *   patch:
- *     summary: Update user profile
- *     description: Update the authenticated user's profile (email, displayCurrency, locale)
+ *         description: No active session
+ */
+
+/**
+ * @swagger
+ * /sign-out:
+ *   post:
+ *     summary: Sign out
+ *     description: Invalidate the current session and clear the session cookie.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     servers:
+ *       - url: http://localhost:3000/api/auth
+ *         description: Auth endpoints (dev)
+ *       - url: https://api.pulapay.com/api/auth
+ *         description: Auth endpoints (prod)
+ *     responses:
+ *       200:
+ *         description: Signed out
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ */
+
+/**
+ * @swagger
+ * /sign-in/social:
+ *   post:
+ *     summary: Social sign-in (Google / Apple)
+ *     description: |
+ *       Initiate a social sign-in flow. Returns a redirect URL for the OAuth provider.
+ *       The mobile app should open this URL in a browser/WebView.
+ *       Account linking is enabled — if the social email matches an existing account, it will be linked.
+ *     tags: [Auth]
+ *     servers:
+ *       - url: http://localhost:3000/api/auth
+ *         description: Auth endpoints (dev)
+ *       - url: https://api.pulapay.com/api/auth
+ *         description: Auth endpoints (prod)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SocialSignInRequest'
+ *     responses:
+ *       200:
+ *         description: Redirect URL returned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url:
+ *                   type: string
+ *                   format: uri
+ *                   description: OAuth provider redirect URL
+ *                 redirect:
+ *                   type: boolean
+ *                   example: true
+ */
+
+/**
+ * @swagger
+ * /update-user:
+ *   post:
+ *     summary: Update user profile
+ *     description: Update the authenticated user's profile fields (name, email, custom fields like displayCurrency, locale).
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     servers:
+ *       - url: http://localhost:3000/api/auth
+ *         description: Auth endpoints (dev)
+ *       - url: https://api.pulapay.com/api/auth
+ *         description: Auth endpoints (prod)
  *     requestBody:
  *       required: true
  *       content:
@@ -194,16 +196,9 @@
  *         content:
  *           application/json:
  *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/ProfileResponse'
+ *               $ref: '#/components/schemas/BetterAuthUser'
  *       401:
  *         description: Unauthorized
- *       409:
- *         description: Email already in use
  */
 
 // ============================================
@@ -356,8 +351,16 @@
  * @swagger
  * /wallet:
  *   post:
- *     summary: Create a new wallet
- *     description: Creates a new Circle programmable wallet for the authenticated user
+ *     summary: Initiate wallet setup (User-Controlled)
+ *     description: |
+ *       Initiates wallet creation for the authenticated user using Circle User-Controlled Wallets.
+ *
+ *       **Flow (2 steps):**
+ *       1. Call `POST /wallet` → receives `challengeId`, `userToken`, `encryptionKey`, `appId`
+ *       2. Mobile resolves the challenge via Circle Web SDK (user sets their PIN)
+ *       3. Call `POST /wallet/confirm-setup` with the `userToken` to activate the wallet
+ *
+ *       If the user already has a wallet, returns a fresh `userToken` with an empty `challengeId`.
  *     tags: [Wallet]
  *     security:
  *       - bearerAuth: []
@@ -367,8 +370,8 @@
  *           schema:
  *             $ref: '#/components/schemas/CreateWalletRequest'
  *     responses:
- *       201:
- *         description: Wallet created successfully
+ *       202:
+ *         description: Wallet setup initiated — challenge data returned for mobile PIN setup
  *         content:
  *           application/json:
  *             schema:
@@ -377,11 +380,73 @@
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/CreateWalletResponse'
+ *                       $ref: '#/components/schemas/WalletSetupChallengeResponse'
  *       401:
  *         description: Unauthorized - missing or invalid token
- *       409:
- *         description: Wallet already exists for this user
+ */
+
+/**
+ * @swagger
+ * /wallet/confirm-setup:
+ *   post:
+ *     summary: Confirm wallet setup after PIN challenge
+ *     description: |
+ *       Called after the mobile app resolves the Circle PIN challenge (wallet setup).
+ *       Fetches the user's wallet from Circle and creates the local wallet record.
+ *
+ *       **When to call:** After `CircleChallengeWebView` fires `onSuccess` with the `userToken`.
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ConfirmWalletSetupRequest'
+ *     responses:
+ *       201:
+ *         description: Wallet activated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/ConfirmWalletSetupResponse'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: No wallet found on Circle for this user token
+ */
+
+/**
+ * @swagger
+ * /wallet/address:
+ *   get:
+ *     summary: Get wallet address
+ *     description: Returns the wallet address and blockchain information for the authenticated user
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Wallet address retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/WalletAddressResponse'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Wallet not found
  */
 
 /**
@@ -631,13 +696,29 @@
 
 /**
  * @swagger
- * /wallet/transfer:
+ * /wallet/transferable:
  *   post:
- *     summary: Transfer funds
- *     description: Transfer USDC to another user (by phone) or external wallet address
+ *     summary: Initiate P2P transfer (User-Controlled)
+ *     description: |
+ *       Initiates a P2P USDC transfer using Circle User-Controlled Wallets.
+ *
+ *       **Flow (2 steps):**
+ *       1. Call `POST /wallet/transferable` → receives challenge data (`challengeId`, `userToken`, `encryptionKey`, `appId`)
+ *       2. Mobile resolves the challenge via Circle Web SDK (user enters their PIN)
+ *       3. Circle executes the transfer on-chain — transaction moves to COMPLETED
+ *
+ *       The transaction is created locally in PENDING status and updated asynchronously once Circle confirms.
+ *
+ *       Idempotency: include `x-idempotency-key` header to prevent duplicate submissions.
  *     tags: [Wallet]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: x-idempotency-key
+ *         schema:
+ *           type: string
+ *         description: Idempotency key to prevent duplicate transfers
  *     requestBody:
  *       required: true
  *       content:
@@ -660,7 +741,7 @@
  *                 currency: "USD"
  *     responses:
  *       202:
- *         description: Transfer initiated
+ *         description: Transfer initiated — challenge data returned for mobile PIN confirmation
  *         content:
  *           application/json:
  *             schema:
@@ -669,9 +750,88 @@
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/TransferResponse'
+ *                       $ref: '#/components/schemas/TransferChallengeResponse'
  *       400:
  *         description: Invalid request / Insufficient funds
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Recipient not found
+ *       409:
+ *         description: Wallet not ACTIVE — sync required
+ */
+
+/**
+ * @swagger
+ * /wallet/transactions/{txId}:
+ *   get:
+ *     summary: Get transaction by ID
+ *     description: Returns a single transaction by its ID, if it belongs to the authenticated user
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: txId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Transaction UUID
+ *     responses:
+ *       200:
+ *         description: Transaction details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/TransactionDetail'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Transaction not found
+ */
+
+/**
+ * @swagger
+ * /wallet/resolve-recipient:
+ *   get:
+ *     summary: Resolve recipient
+ *     description: Resolve a recipient by phone number or wallet address before initiating a transfer
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: phone
+ *         schema:
+ *           type: string
+ *         description: Recipient's phone number
+ *         example: "+22990654321"
+ *       - in: query
+ *         name: address
+ *         schema:
+ *           type: string
+ *         description: Recipient's wallet address
+ *     responses:
+ *       200:
+ *         description: Recipient resolved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 userId:
+ *                   type: string
+ *                 address:
+ *                   type: string
+ *                 phone:
+ *                   type: string
+ *       400:
+ *         description: Either phone or address must be provided
  *       401:
  *         description: Unauthorized
  *       404:

@@ -10,30 +10,26 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
   const startTime = Date.now();
 
+  const route = `${req.method} ${req.path}`;
+
   // Log request
   logger.info(
     {
       requestId,
-      method: req.method,
-      path: req.path,
-      query: req.query,
       ip: req.ip,
+      query: Object.keys(req.query).length ? req.query : undefined,
     },
-    'Incoming request'
+    `--> ${route}`
   );
 
   // Log response on finish
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    logger.info(
-      {
-        requestId,
-        method: req.method,
-        path: req.path,
-        statusCode: res.statusCode,
-        duration,
-      },
-      'Request completed'
+    const status = res.statusCode;
+    const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+    logger[level](
+      { requestId, status, duration },
+      `<-- ${route} ${status} ${duration}ms`
     );
   });
 

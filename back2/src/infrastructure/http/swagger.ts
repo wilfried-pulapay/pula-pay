@@ -27,7 +27,13 @@ const options: swaggerJsdoc.Options = {
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          bearerFormat: 'JWT',
+          description: 'Session token from Better Auth (passed as Authorization: Bearer <session_token>)',
+        },
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'better-auth.session_token',
+          description: 'Session cookie set by Better Auth after sign-in',
         },
       },
       schemas: {
@@ -58,7 +64,8 @@ const options: swaggerJsdoc.Options = {
         },
         Blockchain: {
           type: 'string',
-          enum: ['POLYGON_AMOY', 'ETH_SEPOLIA', 'ARBITRUM_SEPOLIA', 'POLYGON', 'ARBITRUM', 'ETHEREUM'],
+          enum: ['BASE_SEPOLIA', 'BASE'],
+          description: 'Supported blockchains. BASE_SEPOLIA = testnet, BASE = mainnet.',
         },
         TxType: {
           type: 'string',
@@ -76,103 +83,76 @@ const options: swaggerJsdoc.Options = {
           type: 'string',
           enum: ['NONE', 'BASIC', 'VERIFIED', 'ENHANCED'],
         },
-        // Auth schemas
-        RegisterRequest: {
+        // Auth schemas (Better Auth)
+        EmailSignUpRequest: {
           type: 'object',
-          required: ['phone', 'password'],
+          required: ['email', 'password', 'name'],
           properties: {
-            phone: { type: 'string', example: '+22990123456', minLength: 8, maxLength: 15 },
             email: { type: 'string', format: 'email', example: 'user@example.com' },
-            password: { type: 'string', minLength: 8, example: 'securePass123' },
-            displayCurrency: { $ref: '#/components/schemas/Currency' },
+            password: { type: 'string', example: 'mySecureP4ss', minLength: 8, maxLength: 128 },
+            name: { type: 'string', example: 'John Doe' },
           },
         },
-        LoginRequest: {
+        EmailSignInRequest: {
           type: 'object',
-          required: ['phone', 'password'],
+          required: ['email', 'password'],
           properties: {
-            phone: { type: 'string', example: '+22990123456' },
-            password: { type: 'string', example: 'securePass123' },
-          },
-        },
-        RequestOtpRequest: {
-          type: 'object',
-          required: ['phone'],
-          properties: {
-            phone: { type: 'string', example: '+22990123456' },
-          },
-        },
-        VerifyOtpRequest: {
-          type: 'object',
-          required: ['phone', 'otp'],
-          properties: {
-            phone: { type: 'string', example: '+22990123456' },
-            otp: { type: 'string', example: '123456', minLength: 6, maxLength: 6 },
-          },
-        },
-        RefreshTokenRequest: {
-          type: 'object',
-          required: ['refreshToken'],
-          properties: {
-            refreshToken: { type: 'string' },
-          },
-        },
-        UpdateProfileRequest: {
-          type: 'object',
-          properties: {
-            email: { type: 'string', format: 'email' },
-            displayCurrency: { $ref: '#/components/schemas/Currency' },
-            locale: { type: 'string', example: 'fr-FR', minLength: 2, maxLength: 10 },
-          },
-        },
-        User: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            phone: { type: 'string' },
-            email: { type: 'string' },
-            kycLevel: { $ref: '#/components/schemas/KycLevel' },
-            displayCurrency: { $ref: '#/components/schemas/Currency' },
-            locale: { type: 'string' },
-            createdAt: { type: 'string', format: 'date-time' },
-            updatedAt: { type: 'string', format: 'date-time' },
-          },
-        },
-        AuthResponse: {
-          type: 'object',
-          properties: {
-            user: { $ref: '#/components/schemas/User' },
-            accessToken: { type: 'string' },
-            refreshToken: { type: 'string' },
-            expiresIn: { type: 'string', example: '15m' },
+            email: { type: 'string', format: 'email', example: 'user@example.com' },
+            password: { type: 'string', example: 'mySecureP4ss' },
           },
         },
         TokenResponse: {
           type: 'object',
           properties: {
-            accessToken: { type: 'string' },
-            refreshToken: { type: 'string' },
-            expiresIn: { type: 'string', example: '15m' },
+            token: { type: 'string', description: 'Session token (usable as Bearer token)' },
+            user: { $ref: '#/components/schemas/BetterAuthUser' },
           },
         },
-        ProfileResponse: {
+        SocialSignInRequest: {
+          type: 'object',
+          required: ['provider', 'callbackURL'],
+          properties: {
+            provider: { type: 'string', enum: ['google', 'apple'] },
+            callbackURL: { type: 'string', format: 'uri', description: 'URL to redirect after OAuth flow', example: 'pulapay://auth/callback' },
+          },
+        },
+        UpdateProfileRequest: {
           type: 'object',
           properties: {
-            user: { $ref: '#/components/schemas/User' },
-            limits: {
+            name: { type: 'string' },
+            email: { type: 'string', format: 'email' },
+            displayCurrency: { $ref: '#/components/schemas/Currency' },
+            locale: { type: 'string', example: 'fr', minLength: 2, maxLength: 10 },
+          },
+        },
+        SessionResponse: {
+          type: 'object',
+          properties: {
+            session: {
               type: 'object',
               properties: {
-                dailyLimit: { type: 'number', example: 100 },
-                monthlyLimit: { type: 'number', example: 3000 },
+                id: { type: 'string' },
+                userId: { type: 'string' },
+                token: { type: 'string', description: 'Session token (also usable as Bearer token)' },
+                expiresAt: { type: 'string', format: 'date-time' },
               },
             },
+            user: { $ref: '#/components/schemas/BetterAuthUser' },
           },
         },
-        OtpResponse: {
+        BetterAuthUser: {
           type: 'object',
           properties: {
-            message: { type: 'string', example: 'OTP sent successfully' },
-            expiresIn: { type: 'string', example: '10 minutes' },
+            id: { type: 'string' },
+            name: { type: 'string' },
+            email: { type: 'string' },
+            phoneNumber: { type: 'string', example: '+22990123456' },
+            phoneNumberVerified: { type: 'boolean' },
+            kycLevel: { $ref: '#/components/schemas/KycLevel' },
+            displayCurrency: { $ref: '#/components/schemas/Currency' },
+            locale: { type: 'string', example: 'fr' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
           },
         },
         CreateWalletRequest: {
@@ -181,7 +161,35 @@ const options: swaggerJsdoc.Options = {
             blockchain: { $ref: '#/components/schemas/Blockchain' },
           },
         },
-        CreateWalletResponse: {
+        WalletSetupChallengeResponse: {
+          type: 'object',
+          description: 'Challenge data returned by POST /wallet. The mobile app must resolve the challenge via Circle Web SDK (PIN setup) then call POST /wallet/confirm-setup.',
+          properties: {
+            challengeId: { type: 'string', description: 'Circle challenge ID to resolve on mobile' },
+            userToken: { type: 'string', description: 'Circle user token (~1h validity)' },
+            encryptionKey: { type: 'string', description: 'Encryption key used by Circle SDK on mobile' },
+            appId: { type: 'string', description: 'Circle App ID for the Web SDK' },
+          },
+        },
+        ConfirmWalletSetupRequest: {
+          type: 'object',
+          required: ['userToken'],
+          properties: {
+            userToken: { type: 'string', description: 'Circle user token received after PIN challenge is resolved on mobile' },
+            blockchain: { $ref: '#/components/schemas/Blockchain' },
+          },
+        },
+        ConfirmWalletSetupResponse: {
+          type: 'object',
+          description: 'Wallet activated after PIN challenge is resolved.',
+          properties: {
+            walletId: { type: 'string' },
+            address: { type: 'string' },
+            blockchain: { $ref: '#/components/schemas/Blockchain' },
+            status: { $ref: '#/components/schemas/WalletStatus' },
+          },
+        },
+        WalletAddressResponse: {
           type: 'object',
           properties: {
             walletId: { type: 'string' },
@@ -292,13 +300,19 @@ const options: swaggerJsdoc.Options = {
             description: { type: 'string', maxLength: 200 },
           },
         },
-        TransferResponse: {
+        TransferChallengeResponse: {
           type: 'object',
+          description: 'Challenge data returned after initiating a transfer. The mobile app must resolve the challenge via Circle Web SDK (PIN confirmation) to execute the transfer.',
           properties: {
-            transactionId: { type: 'string' },
+            transactionId: { type: 'string', description: 'Local transaction ID (PENDING until challenge resolved)' },
+            challengeId: { type: 'string', description: 'Circle challenge ID to resolve on mobile' },
+            userToken: { type: 'string', description: 'Circle user token (~1h validity)' },
+            encryptionKey: { type: 'string', description: 'Encryption key used by Circle SDK on mobile' },
+            appId: { type: 'string', description: 'Circle App ID for the Web SDK' },
             status: { $ref: '#/components/schemas/TxStatus' },
-            amountUsdc: { type: 'string' },
-            fee: { type: 'string' },
+            amountUsdc: { type: 'string', description: 'Amount in USDC' },
+            displayAmount: { type: 'string', description: 'Amount in display currency' },
+            displayCurrency: { $ref: '#/components/schemas/Currency' },
             recipientAddress: { type: 'string' },
           },
         },
@@ -315,6 +329,29 @@ const options: swaggerJsdoc.Options = {
             description: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
             completedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        TransactionDetail: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            idempotencyKey: { type: 'string' },
+            externalRef: { type: 'string', nullable: true },
+            type: { $ref: '#/components/schemas/TxType' },
+            status: { $ref: '#/components/schemas/TxStatus' },
+            amountUsdc: { type: 'string' },
+            feeUsdc: { type: 'string' },
+            netAmountUsdc: { type: 'string' },
+            exchangeRate: { type: 'string', nullable: true },
+            displayCurrency: { $ref: '#/components/schemas/Currency' },
+            displayAmount: { type: 'string', nullable: true },
+            walletId: { type: 'string' },
+            counterpartyId: { type: 'string', nullable: true },
+            description: { type: 'string', nullable: true },
+            failureReason: { type: 'string', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            completedAt: { type: 'string', format: 'date-time', nullable: true },
           },
         },
         TransactionHistoryResponse: {
@@ -376,6 +413,7 @@ const options: swaggerJsdoc.Options = {
               type: 'object',
               properties: {
                 database: { type: 'string', enum: ['ok', 'error'] },
+                redis: { type: 'string', enum: ['ok', 'error'] },
               },
             },
           },
@@ -384,9 +422,9 @@ const options: swaggerJsdoc.Options = {
     },
     tags: [
       { name: 'Health', description: 'Health check endpoints' },
-      { name: 'Auth', description: 'Authentication and user management' },
+      { name: 'Auth', description: 'Authentication via Better Auth (base path: /api/auth). Email+password, social login (Google/Apple), session management. Account linking enabled across all providers.' },
       { name: 'Exchange Rates', description: 'Currency exchange rates' },
-      { name: 'Wallet', description: 'Wallet management and transactions' },
+      { name: 'Wallet', description: 'Circle User-Controlled Wallet management. Wallet setup and transfers use a 2-step challenge flow: backend initiates → mobile resolves PIN via Circle Web SDK → backend confirms.' },
       { name: 'Webhooks', description: 'Provider webhook handlers' },
     ],
   },
