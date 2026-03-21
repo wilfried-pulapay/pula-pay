@@ -28,34 +28,33 @@ Cross-platform fintech mobile app for USDC wallet management, mobile money on/of
 mobile/
 ├── src/
 │   ├── app/                    # Expo Router screens (file-based routing)
-│   │   ├── _layout.tsx         # Root layout (auth bootstrap, toast container)
+│   │   ├── _layout.tsx         # Root layout (loading guard, toast container)
 │   │   ├── index.tsx           # Entry redirect
 │   │   ├── (auth)/             # Auth stack
-│   │   │   ├── _layout.tsx     # Stack navigator
-│   │   │   ├── login.tsx       # Phone + password login
-│   │   │   ├── register.tsx    # Phone + password + confirm
-│   │   │   └── verify-otp.tsx  # 6-digit OTP verification
+│   │   │   ├── _layout.tsx     # Stack navigator + auth guard
+│   │   │   ├── login.tsx       # Email + password login
+│   │   │   └── register.tsx    # Email + password + confirm → Circle PIN wallet setup
 │   │   └── (main)/            # Main app (tab navigator)
-│   │       ├── _layout.tsx     # Bottom tabs (4 tabs)
+│   │       ├── _layout.tsx     # Bottom tabs (4 tabs) + auth guard
 │   │       ├── dashboard.tsx   # Home: balance, quick actions, recent txs
 │   │       ├── history.tsx     # Full transaction history
-│   │       ├── profile.tsx     # User profile, preferences, logout
+│   │       ├── profile.tsx     # User profile, logout
 │   │       └── wallet/         # Nested stack
 │   │           ├── _layout.tsx # Stack navigator
 │   │           ├── index.tsx   # Wallet overview
-│   │           ├── deposit.tsx # MoMo deposit
-│   │           ├── withdraw.tsx# MoMo withdrawal
+│   │           ├── deposit.tsx # Coinbase CDP deposit
+│   │           ├── withdraw.tsx# Coinbase CDP withdrawal
 │   │           ├── transfert.tsx# P2P transfer
 │   │           └── receive.tsx # QR code + address
+│   ├── lib/                    # Core library modules
+│   │   └── auth.ts             # Better Auth client, useAuth(), getToken(), logout()
 │   ├── api/                    # HTTP layer
-│   │   ├── client.ts           # Axios instance + interceptors + token refresh
-│   │   ├── auth.ts             # Auth endpoints (separate client, no interceptors)
+│   │   ├── client.ts           # Axios instance + interceptors (Bearer token, logging, 401)
 │   │   ├── wallet.ts           # Wallet, balance, transaction endpoints
 │   │   ├── transactions.ts     # Transaction queries
 │   │   ├── users.ts            # User preference updates
 │   │   └── types.ts            # All DTOs, enums, request/response types
 │   ├── store/                  # Zustand state management
-│   │   ├── authStore.ts        # Auth state, tokens, bootstrap, login/logout
 │   │   ├── walletStore.ts      # Wallet, balance, rates, transactions, operations
 │   │   ├── toastStore.ts       # Toast notifications
 │   │   ├── uiStore.ts          # Theme mode, language preference
@@ -79,6 +78,8 @@ mobile/
 │   │   ├── wallet-address.tsx  # Address display + copy + explorer link
 │   │   ├── brand-header.tsx    # App header
 │   │   ├── screen.tsx          # SafeArea + KeyboardAvoiding wrapper
+│   │   ├── auth-form-layout.tsx# Shared auth form container (login + register)
+│   │   ├── circle-challenge-webview.tsx # Circle SDK in WebView modal (PIN / wallet setup)
 │   │   └── error-boundary.tsx  # Catch render errors with retry
 │   ├── hooks/                  # Custom React hooks
 │   │   ├── use-balance.ts      # Fetch balance
@@ -89,6 +90,7 @@ mobile/
 │   │   ├── use-transfert.ts    # Transfer flow + status polling
 │   │   ├── use-transactions.ts # Transaction list fetching
 │   │   ├── use-recipient-id.ts # Recipient lookup by phone
+│   │   ├── use-phone-form.ts   # E.164 phone formatting for forms
 │   │   ├── use-wallet-address.ts# Address + copy + blockchain info
 │   │   ├── use-theme.ts        # Current theme object
 │   │   ├── use-styles.ts       # Memoized StyleSheet from theme
@@ -125,9 +127,8 @@ mobile/
 ```
 / (Root Layout — auth bootstrap + toast container)
 ├── /(auth)/ (Stack)
-│   ├── login          Phone + password
-│   ├── register       Phone + password + confirm
-│   └── verify-otp     6-digit OTP → auto-login → wallet creation
+│   ├── login          Email + password
+│   └── register       Email + password + confirm → Circle PIN wallet setup
 │
 └── /(main)/ (Bottom Tabs — protected, redirects if unauthenticated)
     ├── dashboard      Balance card, quick actions, recent transactions
@@ -145,34 +146,33 @@ mobile/
 
 ### Auth Guard
 
-- Root layout calls `bootstrap()` on mount — loads stored tokens, validates session via `GET /auth/me`
-- `(main)/_layout.tsx` redirects to `/(auth)/login` if `status === "unauthenticated"`
+- Auth state comes from `useAuth()` (wraps Better Auth's `useSession()` via `expoClient`)
+- `(main)/_layout.tsx` redirects to `/(auth)/login` if `status !== "authenticated"`
 - `(auth)/_layout.tsx` redirects to `/(main)/dashboard` if `status === "authenticated"`
+- Both layouts show a loading spinner while `status === "loading"` (initial session fetch)
 
 ## State Management
 
-### Auth Store
+### Auth (Better Auth)
+
+Auth state is managed by **Better Auth** (`src/lib/auth.ts`) — no Zustand auth store.
 
 ```typescript
-State: {
-  token: string | null
-  refreshToken: string | null
-  user: UserDTO | null
-  status: "bootstrapping" | "authenticated" | "unauthenticated"
-  error: AuthError | null
-  bootstrapped: boolean
-}
+// Hook — use in components
+useAuth() → { user: User | null, session, status: "loading" | "authenticated" | "unauthenticated", isPending, error }
 
-Methods:
-  bootstrap()              // Load tokens from secure storage, validate with getMe()
-  login(access, refresh)   // Store tokens, fetch user, sync wallet store currency
-  logout()                 // Clear storage, reset wallet store
-  refreshTokens()          // Use refresh token → new access token
-  refreshUser()            // Re-fetch user profile
-  setDisplayCurrency(c)    // Update backend + local user + wallet store
+// Functions — use outside components
+getToken()   // Read session token from SecureStore synchronously (for axios Bearer injection)
+logout()     // authClient.signOut() + walletStore.reset()
 ```
 
-**Storage:** `expo-secure-store` on native (iOS Keychain, Android Keystore), `localStorage` on web. Keys: `auth_token`, `refresh_token`.
+**Session lifecycle:**
+- Sign-in/register via `authClient.signIn.email()` or `authClient.signUp.email()`
+- `expoClient` plugin stores the session token in `expo-secure-store` (native) / `localStorage` (web) automatically
+- `useSession()` refetches `/api/auth/get-session` with `Authorization: Bearer <token>`
+- On 401, axios interceptor calls `logout()` and fires `onUnauthorized` callback
+
+**Storage key:** `pulapay_cookie` — JSON format `{ "better-auth.session_token": { value, expires } }`
 
 ### Wallet Store
 
@@ -191,19 +191,21 @@ State: {
 }
 
 Methods:
-  fetchWallet()                    // GET /wallet/me
-  fetchBalance(currency?)          // GET /wallet/balance?currency=
-  fetchTransactions()              // GET /wallet/transactions
-  fetchExchangeRates()             // GET /exchange-rates
-  deposit(req, opts?)              // POST /wallet/deposit (idempotent)
-  withdraw(req, opts?)             // POST /wallet/withdraw (idempotent)
-  transfer(req, opts?)             // POST /wallet/transferable (idempotent)
-  syncWalletStatus()               // POST /wallet/sync-status
-  trackTransaction(txId)           // Poll every 2s until terminal state
-  convertToDisplay(amountUsdc)     // USDC × rate, formatted with Intl
-  convertToUsdc(displayAmount)     // displayAmount / rate, 6 decimals
-  setDisplayCurrency(currency)     // Update + re-fetch balance
-  reset()                          // Clear all data on logout
+  fetchWallet()                           // GET /wallet/me
+  fetchBalance(currency?)                 // GET /wallet/balance?currency=
+  fetchTransactions()                     // GET /wallet/transactions
+  fetchExchangeRates()                    // GET /exchange-rates
+  deposit(req, opts?)                     // POST /wallet/deposit (idempotent)
+  withdraw(req, opts?)                    // POST /wallet/withdraw (idempotent)
+  transfer(req, opts?)                    // POST /wallet/transferable → TransferResponse (challenge)
+  initiateWalletSetup(blockchain?)        // POST /wallet → WalletSetupChallenge
+  confirmWalletSetup(userToken, chain?)   // POST /wallet/confirm-setup → WalletSetupConfirm
+  syncWalletStatus()                      // POST /wallet/sync-status
+  trackTransaction(txId)                  // Poll every 2s until terminal state
+  convertToDisplay(amountUsdc)            // USDC × rate, formatted with Intl
+  convertToUsdc(displayAmount)            // displayAmount / rate, 6 decimals
+  setDisplayCurrency(currency)            // Update + re-fetch balance
+  reset()                                 // Clear all data on logout
 ```
 
 **Currency decimals:** EUR: 2, XOF: 0. Formatting uses `Intl.NumberFormat`.
@@ -241,29 +243,29 @@ Methods:
 
 ### Client Configuration
 
-Axios instance with:
-- **Request interceptor:** Injects `Bearer` token, logs `→ METHOD URL`
+Axios instance (`src/api/client.ts`) with:
+- **Request interceptor:** Reads session token via `getToken()`, injects `Authorization: Bearer <token>`, logs `→ METHOD URL`
 - **Response interceptor:** Logs `← STATUS (duration)ms`
-- **401 handler:** Queues failed requests, refreshes token, retries all queued requests. On refresh failure: logout.
+- **401 handler:** Calls `logout()` and fires the `onUnauthorized` callback (set by the root layout to navigate to login)
 
-Auth endpoints use a **separate client** (no interceptors) to avoid circular dependency during token refresh.
+Auth calls (sign-in, sign-up, get-session) go through `authClient` (Better Auth) which uses its own fetch instance via `expoClient`.
 
 ### Endpoints
 
-#### Auth — Public
+#### Auth — Better Auth (managed by `authClient`)
 
 ```
-POST /auth/login              { phone, password }     → { accessToken, refreshToken, user }
-POST /auth/register           { phone, password }     → { accessToken, refreshToken, user }
-POST /auth/request-otp        { phone }               → { message, expiresIn, otp? }
-POST /auth/verify-otp         { phone, otp }          → { accessToken, refreshToken, user }
-POST /auth/refresh            { refreshToken }         → { accessToken, refreshToken }
+POST /api/auth/sign-in/email  { email, password }     → session token (stored by expoClient)
+POST /api/auth/sign-up/email  { email, password, name } → session token (stored by expoClient)
+GET  /api/auth/get-session    Authorization: Bearer   → { session, user }
+POST /api/auth/sign-out                               → clears session
 ```
 
 #### Wallet — Protected
 
 ```
-POST   /wallet                { blockchain? }         → { walletId, address, blockchain, status }
+POST   /wallet                { blockchain? }         → WalletSetupChallenge { challengeId, userToken, encryptionKey, appId }
+POST   /wallet/confirm-setup  { userToken, blockchain? } → WalletSetupConfirm { walletId, address, blockchain, status }
 GET    /wallet/me                                     → WalletDTO
 GET    /wallet/address                                → { walletId, address, blockchain, status }
 POST   /wallet/sync-status                            → { walletId, previousStatus, currentStatus, wasUpdated }
@@ -271,7 +273,7 @@ GET    /wallet/balance        ?currency=EUR           → BalanceDTO
 GET    /exchange-rates        ?currencies=EUR,XOF     → ExchangeRateDTO[]
 POST   /wallet/deposit        + x-idempotency-key     → DepositResponse
 POST   /wallet/withdraw       + x-idempotency-key     → WithdrawResponse
-POST   /wallet/transferable   + x-idempotency-key     → TransferResponse
+POST   /wallet/transferable   + x-idempotency-key     → TransferResponse { transactionId, challengeId, userToken, encryptionKey, appId, ... }
 GET    /wallet/transactions                           → TxDTO[]
 GET    /wallet/transactions/:txId                     → TxDTO
 GET    /wallet/resolve-recipient ?phone=              → userId
@@ -288,7 +290,7 @@ PATCH  /users/me/preferences  { displayCurrency }     → void
 ```typescript
 // Enums
 DisplayCurrency = "EUR" | "XOF"
-Blockchain      = "POLYGON_AMOY" | "POLYGON" | "ARBITRUM"
+Blockchain      = "BASE_SEPOLIA" | "BASE"
 WalletStatus    = "PENDING" | "ACTIVE" | "FROZEN"
 TxStatus        = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" | "EXPIRED"
 TxType          = "DEPOSIT_ONRAMP" | "DEPOSIT_CRYPTO" | "WITHDRAWAL_OFFRAMP" | "WITHDRAWAL_CRYPTO"
@@ -308,10 +310,20 @@ TxDTO = {
   createdAt, completedAt?
 }
 
+// Wallet setup
+WalletSetupChallenge = { challengeId, userToken, encryptionKey, appId }
+WalletSetupConfirm   = { walletId, address, blockchain, status }
+
 // Requests
 DepositRequest  = { amount, currency, provider, msisdn? }
 WithdrawRequest = { amount, currency, provider, msisdn? }
 TransferRequest = { receiverId?, receiverPhone?, receiverAddress?, amount, currency, description? }
+
+// Transfer challenge response
+TransferResponse = {
+  transactionId, challengeId, userToken, encryptionKey, appId,
+  amountUsdc, displayAmount, displayCurrency, recipientAddress, status
+}
 ```
 
 ## Hooks
@@ -327,6 +339,7 @@ TransferRequest = { receiverId?, receiverPhone?, receiverAddress?, amount, curre
 | `useTransactions()`           | `{ transactions, loading, error, getTransactions() }`             | Fetch full tx list                    |
 | `useRecipientId()`            | `{ recipientId, errorKey, errorCode, getPhoneUserId() }`          | Lookup recipient by phone             |
 | `useWalletAddress()`          | `{ address, truncatedAddress, blockchain, copyToClipboard(), copied }` | Address + copy with 2s feedback  |
+| `usePhoneForm()`              | `{ phone, setPhone, countryCode, setCountryCode, formatPhone() }`  | E.164 phone formatting for forms      |
 | `useTheme()`                  | `Theme`                                                             | Current theme (system/override)       |
 | `useStyles(fn)`               | `StyleSheet`                                                        | Memoized styles from theme            |
 
@@ -334,22 +347,20 @@ TransferRequest = { receiverId?, receiverPhone?, receiverAddress?, amount, curre
 
 ### Login
 
-**Fields:** International phone input (country selector), password
-**Validation:** Both required, valid country code
-**Flow:** Sanitize phone → `POST /auth/login` → store tokens → redirect to dashboard
+**Fields:** Email, password
+**Validation:** Both required
+**Flow:** `authClient.signIn.email()` → `expoClient` stores session token → `useAuth()` becomes `authenticated` → auth layout guard redirects to dashboard
 
 ### Register
 
-**Fields:** International phone input, password, confirm password
+**Fields:** Name, email, password, confirm password
 **Validation:** All required, passwords must match
-**Flow:** `POST /auth/register` → navigate to verify-otp with formatted phone
-
-### Verify OTP
-
-**Params:** `phone` (from register)
-**Fields:** 6-digit numeric input (maxLength 6)
-**Flow:** Auto-requests OTP on mount → user enters code → `POST /auth/verify-otp` → auto-login → `POST /wallet` (non-blocking) → redirect to dashboard
-**Features:** Resend OTP button, expiry display
+**Flow:**
+1. `authClient.signUp.email()` → session auto-set
+2. `POST /wallet` → returns `WalletSetupChallenge` (`challengeId`, `userToken`, `encryptionKey`, `appId`)
+3. `CircleChallengeWebView` opens — user sets their PIN via Circle Web SDK
+4. On PIN success: `POST /wallet/confirm-setup` → wallet activated
+5. Auth layout guard redirects to dashboard
 
 ### Dashboard
 
@@ -363,8 +374,7 @@ TransferRequest = { receiverId?, receiverPhone?, receiverAddress?, amount, curre
 ### Deposit
 
 **Step 1 — Method selection:**
-- MTN Mobile Money (active)
-- Orange Money (coming soon, disabled)
+- Coinbase CDP Onramp (card / bank)
 - Receive Crypto (redirects to /receive)
 
 **Step 2 — Amount entry (MTN_MOMO):**
@@ -390,7 +400,12 @@ TransferRequest = { receiverId?, receiverPhone?, receiverAddress?, amount, curre
 **Fields:** Recipient phone (international input), amount, optional note
 **Recipient lookup:** Debounced 400ms → `GET /wallet/resolve-recipient?phone=` → "User found" or error
 **Validation:** Recipient found, sufficient balance
-**Flow:** Sync wallet → `POST /wallet/transferable` → poll → success
+**Flow:**
+1. Sync wallet status → validate ACTIVE
+2. `POST /wallet/transferable` → returns `TransferResponse` (challenge data)
+3. `CircleChallengeWebView` opens — user confirms transfer via PIN
+4. On PIN success: display transaction confirmation (amount, recipient, tx ID)
+5. "View transactions" link
 
 ### Receive
 
@@ -531,19 +546,19 @@ isCredit(direction)                     // "IN" → true
 
 ### Phone Utils
 
+Phone numbers **must** be in [E.164 format](https://en.wikipedia.org/wiki/E.164) (`+<country code><subscriber number>`, e.g. `+22961234567`). The `usePhoneForm` hook produces E.164 strings by concatenating the country IDD root (which includes `+`) with the sanitized local number.
+
 ```typescript
-sanitizeCountryCode(code)    // "+229" → "229"
 sanitizePhoneNumber(phone)   // Remove whitespace
 ```
 
 ### Storage
 
-Abstraction over `expo-secure-store` (native) / `localStorage` (web):
-```typescript
-saveToken(token)      // Store access token
-getToken()            // Retrieve access token
-removeToken()         // Delete access token
-```
+Session storage is handled transparently by the `expoClient` Better Auth plugin:
+- **Native:** `expo-secure-store` (iOS Keychain / Android Keystore), key `pulapay_cookie`
+- **Web:** `localStorage`, key `pulapay_cookie`
+
+`getToken()` in `src/lib/auth.ts` reads this key synchronously to inject the Bearer token into axios requests.
 
 ## Build & Deploy
 
@@ -600,11 +615,12 @@ Use your local network IP for device testing (not `localhost`).
 
 ## Key Patterns
 
+- **Circle Challenge Flow** — Wallet setup and transfers are two-step operations: backend initiates and returns a `challengeId`, mobile resolves via `CircleChallengeWebView` (Circle Web SDK in a Modal WebView). Results communicated via `postMessage`.
+- **User-Controlled wallets** — Users hold their own private keys via PIN. The Circle Web SDK (`@circle-fin/w3s-pw-web-sdk`) is loaded from CDN in a WebView since no official React Native SDK exists.
 - **Idempotency** — All transaction requests include `x-idempotency-key` header to prevent duplicates on retry
-- **Token refresh queue** — On 401, requests queue while token refreshes, then all retry with new token
+- **Better Auth session** — Session managed by `expoClient` plugin; token stored in SecureStore and sent as `Authorization: Bearer` on every API request
 - **Wallet sync before operations** — Every deposit/withdraw/transfer syncs wallet status with Circle first
 - **Transaction polling** — After submitting an operation, polls status every 1.5–2s until terminal state
 - **Debounced recipient lookup** — 400ms delay before querying recipient by phone number
 - **Dual currency display** — All amounts shown in both USDC and user's preferred fiat currency
-- **Secure storage** — Tokens encrypted at rest on native platforms (iOS Keychain / Android Keystore)
-- **Separate auth client** — Auth API uses its own Axios instance without interceptors to avoid circular refresh loops
+- **Secure storage** — Session token encrypted at rest on native platforms (iOS Keychain / Android Keystore) via `expo-secure-store`

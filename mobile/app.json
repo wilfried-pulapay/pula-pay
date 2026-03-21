@@ -44,7 +44,16 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@circle-fin/w3s-pw-react-native-sdk/plugins/podfile-modifier",
+      [
+        "@circle-fin/w3s-pw-react-native-sdk/plugins/withCopyFiles",
+        {
+          "sourceDir": "prebuild-sync-src",
+          "targetDir": ".",
+          "overwrite": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
