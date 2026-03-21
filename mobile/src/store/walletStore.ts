@@ -8,15 +8,19 @@ import {
     getMyWallet,
     getExchangeRates,
     getTxStatus,
-    syncWalletStatus
+    syncWalletStatus,
+    initiateWalletSetup,
+    confirmWalletSetup,
 } from "@/src/api/wallet";
+import { setOnUnauthorized } from "@/src/api/client";
 import { getApiError } from "@/src/utils/api-error";
 import type { TxStatus, DisplayCurrency, ExchangeRateDTO } from "@/src/api/types";
 import type { WalletState } from "./types";
 
-const CURRENCY_DECIMALS: Record<DisplayCurrency, number> = {
+const CURRENCY_DECIMALS: Record<string, number> = {
     EUR: 2,
     XOF: 0,
+    USD: 2,
 };
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -97,37 +101,57 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         }
     },
 
-    // Deposit operation
+    // Deposit operation — returns full response including paymentUrl
     deposit: async (req, opts) => {
         set({ loading: true, error: null });
         try {
             const response = await createDeposit(req, opts);
-            await get().trackTransaction(response.transactionId);
-            return response.transactionId;
+            return response;
         } finally {
             set({ loading: false });
         }
     },
 
-    // Withdraw operation
+    // Withdraw operation — returns full response including paymentUrl
     withdraw: async (req, opts) => {
         set({ loading: true, error: null });
         try {
             const response = await createWithdraw(req, opts);
-            await get().trackTransaction(response.transactionId);
-            return response.transactionId;
+            return response;
         } finally {
             set({ loading: false });
         }
     },
 
-    // Transfer operation
+    // Transfer operation — returns full challenge response (mobile resolves PIN via Circle SDK)
     transfer: async (req, opts) => {
         set({ loading: true, error: null });
         try {
             const response = await createTransfer(req, opts);
-            await get().trackTransaction(response.transactionId);
-            return response.transactionId;
+            return response;
+        } finally {
+            set({ loading: false });
+        }
+    },
+
+    // Initiate wallet setup — returns Circle challenge for PIN setup
+    initiateWalletSetup: async (blockchain) => {
+        set({ loading: true, error: null });
+        try {
+            return await initiateWalletSetup(blockchain);
+        } finally {
+            set({ loading: false });
+        }
+    },
+
+    // Confirm wallet setup — called after Circle SDK challenge is resolved
+    confirmWalletSetup: async (userToken, blockchain) => {
+        set({ loading: true, error: null });
+        try {
+            const result = await confirmWalletSetup(userToken, blockchain);
+            // Refresh wallet state after confirmation
+            await get().fetchBalance();
+            return result;
         } finally {
             set({ loading: false });
         }
@@ -147,7 +171,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
         const rate = parseFloat(exchangeRates[displayCurrency].rate);
         const value = parseFloat(amountUsdc) * rate;
-        const decimals = CURRENCY_DECIMALS[displayCurrency];
+        const decimals = CURRENCY_DECIMALS[displayCurrency] ?? 2;
 
         return new Intl.NumberFormat("fr-FR", {
             style: "currency",
@@ -209,3 +233,5 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         });
     },
 }));
+
+setOnUnauthorized(() => useWalletStore.getState().reset());

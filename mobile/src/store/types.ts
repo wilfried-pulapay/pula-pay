@@ -1,11 +1,16 @@
 import {
     TxDTO,
     DepositRequest,
+    DepositResponse,
     WithdrawRequest,
+    WithdrawResponse,
     TransferRequest,
+    TransferResponse,
     DisplayCurrency,
     ExchangeRateDTO,
-    WalletDTO
+    WalletDTO,
+    WalletSetupChallenge,
+    WalletSetupConfirm,
 } from "@/src/api/types";
 
 // Wallet types ---------------------------------------------------
@@ -38,10 +43,14 @@ export type WalletState = {
     fetchTransactions: () => Promise<void>;
     fetchExchangeRates: () => Promise<void>;
 
-    // Actions - Operations
-    deposit: (req: DepositRequest, opts?: IdempotencyOpts) => Promise<string>;
-    withdraw: (req: WithdrawRequest, opts?: IdempotencyOpts) => Promise<string>;
-    transfer: (req: TransferRequest, opts?: IdempotencyOpts) => Promise<string>;
+    // Actions - Operations (return full response for paymentUrl access)
+    deposit: (req: DepositRequest, opts?: IdempotencyOpts) => Promise<DepositResponse>;
+    withdraw: (req: WithdrawRequest, opts?: IdempotencyOpts) => Promise<WithdrawResponse>;
+    transfer: (req: TransferRequest, opts?: IdempotencyOpts) => Promise<TransferResponse>;
+
+    // Actions - Wallet setup (user-controlled)
+    initiateWalletSetup: (blockchain?: string) => Promise<WalletSetupChallenge>;
+    confirmWalletSetup: (userToken: string, blockchain?: string) => Promise<WalletSetupConfirm>;
 
     // Actions - Helpers
     setDisplayCurrency: (currency: DisplayCurrency) => void;
@@ -55,34 +64,16 @@ export type WalletState = {
 };
 
 // Auth types ---------------------------------------------------
+// Core auth state (token, user, session) is managed by Better Auth via useAuth().
 export type User = {
     id: string;
-    phone: string;
+    phoneNumber: string;
     name?: string;
-    firstName?: string;
     email?: string;
-    isVerified?: boolean;
+    phoneNumberVerified?: boolean;
     displayCurrency: DisplayCurrency;
-};
-
-export type AuthStatus = "bootstrapping" | "authenticated" | "unauthenticated";
-
-export type AuthError = { code: "TOKEN_INVALID" | "NETWORK_ERROR" | "UNKNOWN"; message: string } | null;
-
-export type AuthState = {
-    token: string | null;
-    refreshToken: string | null;
-    user: User | null;
-    status: AuthStatus;
-    error: AuthError;
-    bootstrapped: boolean;
-
-    bootstrap: () => Promise<void>;
-    login: (accessToken: string, refreshToken: string) => Promise<void>;
-    logout: () => Promise<void>;
-    refreshUser: () => Promise<void>;
-    refreshTokens: () => Promise<boolean>;
-    setDisplayCurrency: (currency: DisplayCurrency) => Promise<void>;
+    kycLevel?: string;
+    locale?: string;
 };
 
 // UI types ---------------------------------------------------

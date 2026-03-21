@@ -1,13 +1,12 @@
 import { Redirect } from "expo-router";
-import { useAuthStore } from "../store/authStore";
-import { ActivityIndicator, View } from "react-native";
-
+import { ActivityIndicator } from "react-native";
+import { useAuth } from "../lib/auth";
 import Screen from "../components/screen";
 
 export default function Index() {
-    const status = useAuthStore((s) => s.status);
+    const { status } = useAuth();
 
-    if (status === "bootstrapping") {
+    if (status === "loading") {
         return (
             <Screen>
                 <ActivityIndicator size="large" />
@@ -18,6 +17,8 @@ export default function Index() {
     if (status === "authenticated") {
         return <Redirect href="/(main)/dashboard" />;
     }
+
+    console.log("User is unauthenticated, redirecting to login");
 
     return <Redirect href="/(auth)/login" />;
 }

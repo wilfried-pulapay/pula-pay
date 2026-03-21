@@ -1,28 +1,23 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { useAuthStore } from "../store/authStore";
 import { API_URL } from "../constants/config";
+import { authClient, getToken } from "../lib/auth";
 import { logger } from "../utils/logger";
+
+let onUnauthorized: (() => void) | null = null;
+export function setOnUnauthorized(cb: () => void) { onUnauthorized = cb; }
 
 // Extend config to track request timing and retry state
 interface TimedAxiosRequestConfig extends InternalAxiosRequestConfig {
     metadata?: { startTime: number };
-    _retry?: boolean;
 }
-
-// Lazy import to avoid circular dependency:
-// authStore -> users -> client -> authStore
-//const getAuthStore = () => require("../store/authStore").useAuthStore;
-
 
 const client = axios.create({
     baseURL: API_URL,
 });
 
 client.interceptors.request.use((config: TimedAxiosRequestConfig) => {
-    const { token } = useAuthStore.getState();
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
+    const token = getToken();
+    if (token) config.headers.Authorization = `Bearer ${token}`;
 
     // Track request start time
     config.metadata = { startTime: Date.now() };
@@ -34,23 +29,6 @@ client.interceptors.request.use((config: TimedAxiosRequestConfig) => {
 
     return config;
 });
-
-let isRefreshing = false;
-let failedQueue: Array<{
-    resolve: (token: string) => void;
-    reject: (error: Error) => void;
-}> = [];
-
-const processQueue = (error: Error | null, token: string | null = null) => {
-    failedQueue.forEach((promise) => {
-        if (error) {
-            promise.reject(error);
-        } else if (token) {
-            promise.resolve(token);
-        }
-    });
-    failedQueue = [];
-};
 
 client.interceptors.response.use(
     (response) => {
@@ -83,43 +61,15 @@ client.interceptors.response.use(
             message: error.message,
         });
 
-        // Handle 401 - attempt token refresh
-        if (status === 401 && originalRequest && !originalRequest._retry) {
-            if (isRefreshing) {
-                // Queue this request while refresh is in progress
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({
-                        resolve: (token: string) => {
-                            originalRequest.headers.Authorization = `Bearer ${token}`;
-                            resolve(client(originalRequest));
-                        },
-                        reject: (err: Error) => {
-                            reject(err);
-                        },
-                    });
-                });
-            }
+        // Handle 401 — session expired, force logout
+        if (status === 401) {
+            await authClient.signOut();
+            onUnauthorized?.();
+        }
 
-            originalRequest._retry = true;
-            isRefreshing = true;
-
-            const store = useAuthStore.getState();
-            const refreshed = await store.refreshTokens();
-
-            if (refreshed) {
-                const newToken = useAuthStore.getState().token;
-                processQueue(null, newToken);
-                isRefreshing = false;
-
-                // Retry original request with new token
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                return client(originalRequest);
-            }
-
-            // Refresh failed - logout and reject all queued requests
-            processQueue(new Error('Token refresh failed'));
-            isRefreshing = false;
-            await store.logout();
+        // Handle 429 — rate limited
+        if (status === 429) {
+            logger.error('API', 'Rate limited — too many requests');
         }
 
         return Promise.reject(error);

@@ -1,32 +1,20 @@
 import "../i18n";
 import { Slot } from "expo-router";
-import { useEffect, useRef } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { useAuthStore } from "../store/authStore";
+import { useAuth } from "../lib/auth";
 import { useTheme } from "../theme";
 import { ToastContainer } from "../components/ui/toast-container";
 
 export default function RootLayout() {
     const theme = useTheme();
-    const status = useAuthStore((s) => s.status);
-    const bootstrap = useAuthStore((s) => s.bootstrap);
+    const { isPending } = useAuth();
 
-    const hasBootstrappedRef = useRef(false);
-
-    useEffect(() => {
-        if (hasBootstrappedRef.current) {
-            return;
-        }
-        hasBootstrappedRef.current = true;
-        bootstrap();
-    }, [bootstrap]);
-
-    if (status === "bootstrapping") {
+    if (isPending) {
         return (
             <View
                 style={{
                     flex: 1,
-                    backgroundColor: theme.background,
+                    backgroundColor: theme.colors.background,
                     alignItems: "center",
                     justifyContent: "center",
                 }}

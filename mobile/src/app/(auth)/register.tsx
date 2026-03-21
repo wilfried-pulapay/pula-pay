@@ -1,27 +1,22 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
-import Screen from "@/src/components/screen";
+import { router } from "expo-router";
 import Input from "@/src/components/ui/Input";
-import Button from "@/src/components/ui/button";
-import PhoneInput, { ICountry } from "@/src/components/ui/phone-input";
-import { register } from "../../api/auth";
-import { sanitizeCountryCode, sanitizePhoneNumber } from "../../utils/phone";
-import { getApiError } from "../../utils/api-error";
+import AuthFormLayout, { getAuthFormStyles } from "@/src/components/auth-form-layout";
 import { useStyles } from "@/src/hooks/use-styles";
-import type { Theme } from "@/src/theme/types";
+import { authClient } from "../../lib/auth";
 
 export default function Register() {
     const { t } = useTranslation();
-    const router = useRouter();
-    const styles = useStyles(getStyles);
+    const styles = useStyles(getAuthFormStyles);
 
-    const [phone, setPhone] = useState("");
-    const [contryCode, setCountryCode] = useState<null | ICountry>(null);
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = async () => {
@@ -29,7 +24,7 @@ export default function Register() {
             setLoading(true);
             setError(null);
 
-            if (!phone || !password || !confirmPassword) {
+            if (!name || !email || !password || !confirmPassword) {
                 setError(t("validation.fillAllFields"));
                 return;
             }
@@ -37,39 +32,75 @@ export default function Register() {
                 setError(t("validation.passwordMismatch"));
                 return;
             }
-            if (!contryCode?.idd?.root) {
-                setError(t("validation.invalidPhone"));
+
+            const { error: signUpError } = await authClient.signUp.email({
+                email,
+                password,
+                name,
+            });
+
+            if (signUpError) {
+                setError(signUpError.message ?? t("apiErrors.UNKNOWN_ERROR"));
                 return;
             }
 
-            const formattedPhone = sanitizeCountryCode(contryCode.idd.root) + sanitizePhoneNumber(phone);
-            await register(formattedPhone, password);
-            router.push({ pathname: "/(auth)/verify-otp", params: { phone: formattedPhone } });
-        } catch (e) {
-            const { code, translationKey, message } = getApiError(e);
-            if (code === "VALIDATION_ERROR" && message) {
-                setError(message);
-            } else {
-                setError(t(translationKey));
-            }
+            router.replace("/(main)/dashboard");
+        } catch {
+            setError(t("apiErrors.NETWORK_ERROR"));
         } finally {
             setLoading(false);
         }
     };
-    
+
+    const handleGoogleSignIn = async () => {
+        try {
+            setGoogleLoading(true);
+            setError(null);
+            await authClient.signIn.social({
+                provider: "google",
+                callbackURL: "pulapay://auth/callback",
+            });
+        } catch {
+            setError(t("apiErrors.NETWORK_ERROR"));
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
 
     return (
-        <Screen scroll style={styles.container}>
-            <View style={styles.card}>
-                <Text style={styles.logo}>Pulapay</Text>
-                <Text style={styles.title}>{t("register.title")}</Text>
+        <>
+            <AuthFormLayout
+                title={t("register.title")}
+                buttonTitle={t("register.button")}
+                linkText={t("register.goToLogin")}
+                linkLabel={t("login.title")}
+                linkHref="/(auth)/login"
+                error={error}
+                loading={loading}
+                onSubmit={handleSubmit}
+                onGoogleSignIn={handleGoogleSignIn}
+                googleLoading={googleLoading}
+            >
+                <View style={styles.formGroup}>
+                    <Text style={styles.label}>{t("register.name")}</Text>
+                    <Input
+                        placeholder="John Doe"
+                        value={name}
+                        onChangeText={setName}
+                        autoCapitalize="words"
+                        editable={!loading}
+                    />
+                </View>
 
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>{t("login.phone")}</Text>
-                    <PhoneInput
-                        value={phone}
-                        onChangePhoneNumber={setPhone}
-                        onChangeSelectedCountry={setCountryCode}
+                    <Text style={styles.label}>{t("register.email")}</Text>
+                    <Input
+                        placeholder="you@example.com"
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        editable={!loading}
                     />
                 </View>
 
@@ -94,81 +125,7 @@ export default function Register() {
                         editable={!loading}
                     />
                 </View>
-
-                {error && <Text style={styles.error}>{error}</Text>}
-
-                <Button
-                    title={t("register.button")}
-                    onPress={handleSubmit}
-                    loading={loading}
-                    fullWidth
-                />
-
-                <View style={styles.linkContainer}>
-                    <Text style={styles.linkText}>{t("register.goToLogin")} </Text>
-                    <Link href="/(auth)/login" asChild>
-                        <TouchableOpacity>
-                            <Text style={styles.linkButton}>{t("login.title")}</Text>
-                        </TouchableOpacity>
-                    </Link>
-                </View>
-            </View>
-        </Screen>
+            </AuthFormLayout>
+        </>
     );
 }
-
-const getStyles = (theme: Theme) => StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: theme.spacing.m,
-        backgroundColor: theme.colors.background,
-    },
-    card: {
-        borderRadius: theme.borderRadius.l,
-        padding: theme.spacing.xl,
-        backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.surfaceVariant,
-    },
-    logo: {
-        ...theme.typography.h1,
-        color: theme.colors.primary,
-        textAlign: "center",
-        marginBottom: theme.spacing.s,
-    },
-    title: {
-        ...theme.typography.h2,
-        color: theme.colors.text,
-        textAlign: "center",
-        marginBottom: theme.spacing.l,
-    },
-    formGroup: {
-        marginBottom: theme.spacing.m,
-    },
-    label: {
-        ...theme.typography.caption,
-        color: theme.colors.textMuted,
-        marginBottom: theme.spacing.xs,
-    },
-    error: {
-        ...theme.typography.caption,
-        color: theme.colors.danger,
-        marginTop: theme.spacing.m,
-        fontWeight: "500",
-    },
-    linkContainer: {
-        flexDirection: "row",
-        justifyContent: "center",
-        marginTop: theme.spacing.l,
-    },
-    linkText: {
-        ...theme.typography.caption,
-        color: theme.colors.textMuted,
-    },
-    linkButton: {
-        ...theme.typography.caption,
-        color: theme.colors.primary,
-        fontWeight: "700",
-    }
-});
