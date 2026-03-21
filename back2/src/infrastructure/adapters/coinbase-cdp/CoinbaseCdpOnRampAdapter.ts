@@ -146,7 +146,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
 
   async initiateDeposit(params: InitiateDepositParams): Promise<DepositResult> {
     const walletAddress = params.walletAddress;
-    const blockchain = params.blockchain ?? 'POLYGON_AMOY';
+    const blockchain = params.blockchain ?? 'BASE_SEPOLIA';
     const country = params.country ?? config.coinbase.defaultCountry;
 
     // 1. Create session token
@@ -224,7 +224,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
 
   async initiatePayout(params: InitiatePayoutParams): Promise<PayoutResult> {
     const walletAddress = params.walletAddress;
-    const blockchain = params.blockchain ?? 'POLYGON_AMOY';
+    const blockchain = params.blockchain ?? 'BASE_SEPOLIA';
     const country = params.country ?? config.coinbase.defaultCountry;
     const cashoutCurrency = params.cashoutCurrency ?? params.currency;
 
@@ -334,6 +334,8 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
 
   private mapBlockchainName(blockchain: string): string {
     const mapping: Record<string, string> = {
+      BASE_SEPOLIA: 'base',
+      BASE: 'base',
       POLYGON_AMOY: 'polygon',
       POLYGON: 'polygon',
       ETHEREUM: 'ethereum',
@@ -341,6 +343,6 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
       ARBITRUM: 'arbitrum',
       ARBITRUM_SEPOLIA: 'arbitrum',
     };
-    return mapping[blockchain] ?? 'polygon';
+    return mapping[blockchain] ?? 'base';
   }
 }

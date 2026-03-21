@@ -13,11 +13,16 @@ export interface CreateWalletCommand {
   idempotencyKey?: string;
 }
 
+/**
+ * Result returned to the mobile after wallet setup initiation.
+ * The mobile must resolve the challenge using Circle SDK (PIN setup),
+ * then call POST /wallet/confirm-setup to finalize.
+ */
 export interface CreateWalletResult {
-  walletId: string;
-  address: string;
-  blockchain: Blockchain;
-  status: 'pending' | 'active';
+  challengeId: string;
+  userToken: string;
+  encryptionKey: string;
+  appId: string;
 }
 
 export class CreateWalletHandler {
@@ -31,60 +36,49 @@ export class CreateWalletHandler {
     const idempotencyKey = command.idempotencyKey ?? generateIdempotencyKey();
     const blockchain = (command.blockchain ?? config.blockchain.default) as Blockchain;
 
-    // Check if user exists
+    // Check user exists
     const user = await this.userRepo.findById(command.userId);
     if (!user) {
       throw new UserNotFoundError(command.userId);
     }
 
-    // Check if wallet already exists
+    // If wallet already exists, get a fresh user token so mobile can re-confirm
     const existingWallet = await this.walletRepo.findByUserId(command.userId);
     if (existingWallet) {
-      logger.info({ userId: command.userId, walletId: existingWallet.id }, 'Wallet already exists');
+      logger.info({ userId: command.userId }, 'Wallet already exists — returning fresh user token');
+      const tokenResult = await this.walletProvider.getUserToken(command.userId);
       return {
-        walletId: existingWallet.id,
-        address: existingWallet.address,
-        blockchain: existingWallet.blockchain,
-        status: existingWallet.isActive() ? 'active' : 'pending',
+        challengeId: '',
+        userToken: tokenResult.userToken,
+        encryptionKey: tokenResult.encryptionKey,
+        appId: config.circle.appId,
       };
     }
 
-    // Create wallet via Circle
-    const circleResult = await this.walletProvider.createWallet({
+    // 1. Ensure user is registered in Circle
+    await this.walletProvider.registerUser(command.userId);
+
+    // 2. Get a user token for this session
+    const tokenResult = await this.walletProvider.getUserToken(command.userId);
+
+    // 3. Initiate wallet setup — returns challengeId for PIN setup on mobile
+    const setupResult = await this.walletProvider.initiateWalletSetup({
       userId: command.userId,
+      userToken: tokenResult.userToken,
+      blockchain,
       idempotencyKey,
-      blockchain,
     });
 
-    // Persist wallet
-    const wallet = await this.walletRepo.create({
-      userId: command.userId,
-      circleWalletId: circleResult.circleWalletId,
-      walletSetId: circleResult.walletSetId,
-      address: circleResult.address,
-      blockchain,
-    });
-
-    // If Circle returned LIVE status immediately, activate the wallet
-    if (circleResult.status === 'active') {
-      wallet.activate();
-      await this.walletRepo.update(wallet);
-      logger.info(
-        { userId: command.userId, walletId: wallet.id, address: wallet.address },
-        'Wallet created and immediately activated'
-      );
-    } else {
-      logger.info(
-        { userId: command.userId, walletId: wallet.id, address: wallet.address },
-        'Wallet created in pending state'
-      );
-    }
+    logger.info(
+      { userId: command.userId, challengeId: setupResult.challengeId },
+      'Wallet setup initiated — awaiting mobile PIN challenge resolution'
+    );
 
     return {
-      walletId: wallet.id,
-      address: wallet.address,
-      blockchain: wallet.blockchain,
-      status: circleResult.status,
+      challengeId: setupResult.challengeId,
+      userToken: tokenResult.userToken,
+      encryptionKey: tokenResult.encryptionKey,
+      appId: config.circle.appId,
     };
   }
 }

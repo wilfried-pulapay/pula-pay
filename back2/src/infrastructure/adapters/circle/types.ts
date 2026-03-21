@@ -1,12 +1,11 @@
 /**
- * Circle API types
+ * Circle User-Controlled Wallets API types
  */
 
 export interface CircleWallet {
   id: string;
   state: 'LIVE' | 'PENDING' | 'FROZEN';
-  walletSetId: string;
-  custodyType: string;
+  custodyType: 'USER' | 'DEVELOPER';
   userId?: string;
   address: string;
   blockchain: string;
@@ -15,6 +14,8 @@ export interface CircleWallet {
   createDate: string;
   refId?: string;
   name?: string;
+  // Only for developer-controlled
+  walletSetId?: string;
   initialPublicKey?: string;
 }
 
@@ -35,7 +36,16 @@ export interface CircleTokenBalance {
 
 export interface CircleTransaction {
   id: string;
-  state: 'INITIATED' | 'PENDING_RISK_SCREENING' | 'DENIED' | 'QUEUED' | 'SENT' | 'CONFIRMED' | 'COMPLETE' | 'FAILED' | 'CANCELLED';
+  state:
+    | 'INITIATED'
+    | 'PENDING_RISK_SCREENING'
+    | 'DENIED'
+    | 'QUEUED'
+    | 'SENT'
+    | 'CONFIRMED'
+    | 'COMPLETE'
+    | 'FAILED'
+    | 'CANCELLED';
   txHash?: string;
   walletId: string;
   sourceAddress?: string;
@@ -44,7 +54,6 @@ export interface CircleTransaction {
   custodyType: string;
   userId?: string;
   amounts: string[];
-  nfts?: unknown[];
   tokenId: string;
   blockchain: string;
   networkFee?: string;
@@ -64,6 +73,22 @@ export interface CircleTransaction {
   updateDate: string;
 }
 
+export interface CircleChallenge {
+  id: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETE' | 'FAILED' | 'EXPIRED';
+  type: string;
+  correlationIds?: string[];
+  errorCode?: number;
+  errorMessage?: string;
+  createDate: string;
+  updateDate: string;
+}
+
+export interface CircleUserToken {
+  userToken: string;
+  encryptionKey: string;
+}
+
 export interface CircleWebhookPayload {
   subscriptionId: string;
   notificationId: string;
@@ -76,7 +101,6 @@ export interface CircleWebhookPayload {
     userId?: string;
     destinationAddress?: string;
     amounts?: string[];
-    nftTokenIds?: string[];
     txHash?: string;
     transactionType: string;
     state: string;
