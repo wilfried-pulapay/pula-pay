@@ -1,9 +1,9 @@
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View, StyleProp, ViewStyle, TextStyle } from "react-native";
-import { useTheme } from "@/src/theme";
 import { useStyles } from "@/src/hooks/use-styles";
 import type { Theme } from "@/src/theme/types";
 
 type Variant = "primary" | "secondary" | "outline" | "danger";
+type Size = "sm" | "default" | "lg";
 
 type Props = {
     title: string;
@@ -12,6 +12,7 @@ type Props = {
     loadingText?: string;
     disabled?: boolean;
     variant?: Variant;
+    size?: Size;
     style?: StyleProp<ViewStyle>;
     textStyle?: StyleProp<TextStyle>;
     fullWidth?: boolean;
@@ -24,20 +25,20 @@ export default function Button({
     loadingText,
     disabled = false,
     variant = "primary",
+    size = "default",
     style,
     textStyle,
     fullWidth = true,
 }: Props) {
-    //const theme = useTheme();
     const isDisabled = disabled || loading;
-    const styles = useStyles((theme: Theme) => getStyles(theme, variant, isDisabled, fullWidth));
+    const styles = useStyles((theme: Theme) => getStyles(theme, variant, size, isDisabled, fullWidth));
 
     return (
         <TouchableOpacity
             style={[styles.button, style]}
             onPress={onPress}
             disabled={isDisabled}
-            activeOpacity={0.7}
+            activeOpacity={isDisabled ? 1 : 0.75}
             accessibilityRole="button"
             accessibilityState={{ disabled: isDisabled, busy: loading }}
         >
@@ -55,7 +56,13 @@ export default function Button({
     );
 }
 
-const getStyles = (theme: Theme, variant: Variant, disabled: boolean, fullWidth: boolean) => {
+const SIZE_PADDING: Record<Size, { h: number; v: number; fontSize: number }> = {
+    sm:      { h: 18, v: 9,  fontSize: 12 },
+    default: { h: 28, v: 14, fontSize: 14 },
+    lg:      { h: 36, v: 16, fontSize: 16 },
+};
+
+const getStyles = (theme: Theme, variant: Variant, size: Size, disabled: boolean, fullWidth: boolean) => {
     const variantStyles = {
         primary: {
             bg: theme.colors.primary,
@@ -63,44 +70,47 @@ const getStyles = (theme: Theme, variant: Variant, disabled: boolean, fullWidth:
             text: theme.colors.onPrimary,
         },
         secondary: {
-            bg: theme.colors.surfaceVariant,
-            border: theme.colors.outline,
-            text: theme.colors.text,
+            bg: theme.colors.ink,
+            border: theme.colors.ink,
+            text: '#FFFFFF',
         },
         outline: {
-            bg: "transparent",
-            border: theme.colors.primary,
-            text: theme.colors.primary,
+            bg: 'transparent',
+            border: theme.colors.border,
+            text: theme.colors.text,
         },
         danger: {
-            bg: theme.colors.danger,
-            border: theme.colors.danger,
-            text: theme.colors.onPrimary,
+            bg: theme.colors.dangerLight,
+            border: theme.colors.dangerLight,
+            text: theme.colors.danger,
         },
-    }
+    };
 
     const currentVariant = variantStyles[variant];
+    const sizing = SIZE_PADDING[size];
 
     return StyleSheet.create({
         button: {
-            borderRadius: theme.borderRadius.m,
-            paddingVertical: theme.spacing.m,
-            paddingHorizontal: theme.spacing.l,
-            alignItems: "center",
-            justifyContent: "center",
+            borderRadius: theme.borderRadius.full,
+            paddingVertical: sizing.v,
+            paddingHorizontal: sizing.h,
+            alignItems: 'center',
+            justifyContent: 'center',
             marginTop: theme.spacing.m,
-            borderWidth: 1,
-            backgroundColor: disabled ? theme.colors.outline : currentVariant.bg,
-            borderColor: disabled ? theme.colors.outline : currentVariant.border,
-            alignSelf: fullWidth ? "stretch" : "center",
+            borderWidth: 1.5,
+            backgroundColor: currentVariant.bg,
+            borderColor: currentVariant.border,
+            alignSelf: fullWidth ? 'stretch' : 'center',
+            opacity: disabled ? 0.4 : 1,
         },
         loadingContainer: {
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
         },
         text: {
-            ...theme.typography.body,
+            fontSize: sizing.fontSize,
+            fontWeight: '600',
             color: disabled ? theme.colors.textMuted : currentVariant.text,
         }
     });

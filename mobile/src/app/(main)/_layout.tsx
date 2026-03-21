@@ -1,16 +1,16 @@
 import { Tabs, Redirect } from "expo-router";
 
-import { useAuthStore } from "../../store/authStore";
+import { useAuth } from "../../lib/auth";
 import { useTheme } from "@/src/theme";
 import LoadingSpinner from "@/src/components/ui/loading-spinner";
 import BrandHeader from "@/src/components/brand-header";
-import { House, Wallet, History, ArrowLeftRight, Settings } from "lucide-react-native";
+import { House, Wallet, History, Settings } from "lucide-react-native";
 
 export default function MainLayout() {
-    const status = useAuthStore((s) => s.status);
+    const { status } = useAuth();
     const theme = useTheme();
 
-    if (status === "bootstrapping") {
+    if (status === "loading") {
         return <LoadingSpinner message="Chargement…" />;
     }
 
@@ -24,8 +24,13 @@ export default function MainLayout() {
                 headerShown: true,
                 header: () => <BrandHeader />,
                 tabBarActiveTintColor: theme.colors.primary,
-                tabBarInactiveTintColor: theme.colors.placeholder,
-                tabBarStyle: { backgroundColor: theme.colors.background }
+                tabBarInactiveTintColor: theme.colors.textMuted,
+                tabBarStyle: {
+                    backgroundColor: theme.colors.surface,
+                    borderTopWidth: 1,
+                    borderTopColor: theme.colors.border,
+                },
+                tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
             }}>
             <Tabs.Screen name="dashboard" options={{
                 title: "Home",

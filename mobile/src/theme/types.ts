@@ -9,15 +9,18 @@ export type ColorPalette = {
   onSecondary: string;
 
   // Surface & Background
-  background: string; 
+  background: string;
   surface: string;
-  surfaceVariant: string;
-  
-  // Content Colors
-  text: string;         
+  surfaceVariant: string;  // kept for compat — equals surfaceAlt
+  surfaceAlt: string;      // mist / alternate section bg
+
+  // Text
+  text: string;
   textMuted: string;
-  outline: string;
-  
+  outline: string;         // kept for compat — equals border
+  border: string;          // rule color for dividers and input borders
+  ink: string;             // near-black for dark surfaces
+
   // Inputs
   inputBackground: string;
   placeholder: string;
@@ -35,11 +38,11 @@ export type ColorPalette = {
 };
 
 export type Spacing = {
-  xs: number; 
-  s: number;  
-  m: number;  
-  l: number;  
-  xl: number; 
+  xs: number;
+  s: number;
+  m: number;
+  l: number;
+  xl: number;
   xxl: number;
 };
 
@@ -48,9 +51,11 @@ export type Theme = {
   colors: ColorPalette;
   spacing: Spacing;
   borderRadius: {
+    xs: number;
     s: number;
     m: number;
     l: number;
+    xl: number;
     full: number;
   };
   typography: {
@@ -58,5 +63,12 @@ export type Theme = {
     h2: TextStyle;
     body: TextStyle;
     caption: TextStyle;
+    label: TextStyle;
+  };
+  shadows: {
+    xs: object;
+    sm: object;
+    md: object;
+    lg: object;
   };
 };

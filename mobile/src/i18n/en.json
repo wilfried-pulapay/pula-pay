@@ -19,24 +19,19 @@
     },
     "login": {
         "title": "Login",
-        "phone": "Phone number",
+        "email": "Email",
         "password": "Password",
         "button": "Sign in",
         "goToRegister": "Create an account"
     },
     "register": {
         "title": "Create an account",
-        "phone": "Phone number",
+        "name": "Full name",
+        "email": "Email",
         "password": "Password",
         "confirmPassword": "Confirm password",
         "button": "Sign up",
-        "goToLogin": "Already have an account? Sign in",
-        "verifyPhone": "Verify your phone",
-        "otpSent": "Enter the code sent to your phone",
-        "otpSending": "Sending code...",
-        "otpSentSuccess": "Code sent! Expires in {{expiresIn}}",
-        "verifyButton": "Verify code",
-        "resendOtp": "Resend code"
+        "goToLogin": "Already have an account? Sign in"
     },
     "home": {
         "welcome": "Welcome, {{phone}}",
@@ -54,9 +49,9 @@
         "refresh": "Refresh",
         "refreshing": "Refreshing...",
         "type": {
-            "DEPOSIT_ONRAMP": "Mobile Money Deposit",
+            "DEPOSIT_ONRAMP": "Deposit",
             "DEPOSIT_CRYPTO": "Crypto Deposit",
-            "WITHDRAWAL_OFFRAMP": "Mobile Money Withdrawal",
+            "WITHDRAWAL_OFFRAMP": "Withdrawal",
             "WITHDRAWAL_CRYPTO": "Crypto Withdrawal",
             "TRANSFER_P2P": "P2P Transfer",
             "REFUND": "Refund",
@@ -96,40 +91,43 @@
     },
     "deposit": {
         "title": "Top up wallet",
-        "success": "Deposit successful",
-        "selectMethod": "Select a method",
-        "mtn_momo": "MTN Mobile Money",
-        "orange_money": "Orange Money",
+        "success": "Deposit initiated",
+        "selectMethod": "Select a payment method",
+        "paymentMethod": "Payment method",
+        "card": "Card",
+        "ach_bank_account": "Bank Transfer",
+        "apple_pay": "Apple Pay",
         "crypto": "Receive Crypto",
-        "method": "Method",
-        "phone": "Phone number",
         "amount": "Amount",
         "amountPlaceholder": "e.g. 100.00",
         "equivalentUsdc": "USDC equivalent",
         "exchangeRateUsed": "Rate applied",
         "submit": "Deposit",
-        "submitting": "Sending...",
+        "submitting": "Processing...",
         "viewTransactions": "View transactions",
         "txId": "Reference",
-        "methodNotSupported": "Method not yet supported",
+        "openPayment": "Loading payment page...",
+        "completingPayment": "Complete your payment",
         "checkingWallet": "Checking wallet status...",
         "walletActivated": "Wallet activated successfully!",
         "walletNotActive": "Wallet is not active. Please try again in a few moments."
     },
     "withdraw": {
         "title": "Withdrawal request",
-        "success": "Withdrawal successful",
+        "success": "Withdrawal initiated",
         "availableBalance": "Available balance",
         "method": "Payment method",
-        "phone": "Phone number",
+        "ach_bank_account": "Bank Transfer",
+        "card": "Card",
         "amount": "Amount to withdraw",
         "amountUsdc": "USDC equivalent",
         "amountPlaceholder": "e.g. 100.00",
         "submit": "Withdraw",
-        "submitting": "Sending...",
+        "submitting": "Processing...",
         "viewTransactions": "View transactions",
         "txId": "Reference",
-        "methodNotSupported": "Method not yet supported",
+        "openPayment": "Loading payment page...",
+        "completingPayment": "Complete your withdrawal",
         "insufficientFunds": "Insufficient funds",
         "checkingWallet": "Checking wallet status...",
         "walletActivated": "Wallet activated successfully!",
@@ -180,15 +178,16 @@
     },
     "currencies": {
         "EUR": "Euro (EUR)",
-        "XOF": "CFA Franc (XOF)"
+        "XOF": "CFA Franc (XOF)",
+        "USD": "US Dollar (USD)"
     },
     "quickActions": {
         "title": "Services",
         "seeAll": "See all",
         "deposit": {
             "title": "Deposit",
-            "subtitle": "Mobile Money",
-            "description": "MTN, Orange"
+            "subtitle": "Card / Bank",
+            "description": "Via Coinbase"
         },
         "receive": {
             "title": "Receive",
@@ -202,8 +201,8 @@
         },
         "withdraw": {
             "title": "Withdraw",
-            "subtitle": "Mobile Money",
-            "description": "To MoMo"
+            "subtitle": "Bank / Card",
+            "description": "To bank account"
         },
         "recharge": {
             "title": "Recharge",
@@ -222,7 +221,8 @@
         "title": "Error",
         "depositFailed": "Deposit failed",
         "withdrawFailed": "Withdrawal failed",
-        "transferFailed": "Transfer failed"
+        "transferFailed": "Transfer failed",
+        "rateLimited": "Too many requests. Please wait a moment."
     },
     "validation": {
         "fillAllFields": "Please fill in all fields.",
@@ -234,6 +234,7 @@
         "VALIDATION_ERROR": "The information entered is invalid. Please check and try again.",
         "USER_EXISTS": "This phone number is already registered.",
         "PHONE_EXISTS": "This phone number is already registered.",
+        "PHONE_ALREADY_REGISTERED": "This phone number is already registered.",
         "EMAIL_EXISTS": "This email is already registered.",
         "ALREADY_VERIFIED": "Your account is already verified.",
         "SELF_TRANSFER": "You cannot transfer to yourself.",
@@ -250,6 +251,10 @@
         "WALLET_FROZEN": "Your wallet is temporarily frozen. Please contact support.",
         "CONFLICT": "A conflict occurred. Please try again.",
         "INSUFFICIENT_FUNDS": "Insufficient balance for this operation.",
+        "RATE_LIMITED": "Too many requests. Please wait a moment and try again.",
+        "INVALID_STATE_TRANSITION": "This operation cannot be performed in the current state.",
+        "LEDGER_IMBALANCE": "A ledger error occurred. Please contact support.",
+        "REGISTRATION_FAILED": "Registration failed. Please try again.",
         "INTERNAL_ERROR": "A server error occurred. Please try again later.",
         "NETWORK_ERROR": "Unable to connect to the server. Check your internet connection.",
         "UNKNOWN_ERROR": "An unexpected error occurred. Please try again."

@@ -87,7 +87,9 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         backgroundColor: theme.colors.background,
     },
     title: {
-        ...theme.typography.h2,
+        fontSize: 22,
+        fontWeight: '700',
+        letterSpacing: -0.5,
         color: theme.colors.text,
         marginBottom: theme.spacing.m,
     },
@@ -98,8 +100,8 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         borderRadius: theme.borderRadius.m,
         paddingHorizontal: theme.spacing.s,
         marginBottom: theme.spacing.m,
-        borderWidth: 1,
-        borderColor: theme.colors.outline,
+        borderWidth: 1.5,
+        borderColor: theme.colors.border,
     },
     searchInput: {
         flex: 1,
@@ -112,11 +114,13 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         color: theme.colors.danger,
         marginBottom: theme.spacing.m,
         textAlign: 'center',
+        fontSize: 13,
     },
     emptyText: {
         textAlign: 'center',
         color: theme.colors.textMuted,
         marginTop: theme.spacing.xl,
+        fontSize: 14,
     },
     emptyList: {
         flexGrow: 1,
@@ -128,15 +132,17 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         justifyContent: 'center',
         gap: theme.spacing.xs,
         marginTop: theme.spacing.m,
-        padding: theme.spacing.m,
+        paddingVertical: 14,
+        paddingHorizontal: 28,
         backgroundColor: theme.colors.primary,
-        borderRadius: theme.borderRadius.m,
+        borderRadius: theme.borderRadius.full,
     },
     refreshButtonDisabled: {
         opacity: 0.7,
     },
     refreshButtonText: {
         color: theme.colors.onPrimary,
-        fontWeight: '700',
+        fontWeight: '600',
+        fontSize: 14,
     },
 });

@@ -64,11 +64,13 @@ export default function Input({
 }
 
 const getStyles = (theme: Theme, focused: boolean, hasError: boolean) => {
-    let borderColor = theme.colors.outline;
+    let borderColor = theme.colors.border;
+    let bgColor = theme.colors.surface;
     if (hasError) {
-        borderColor = theme.colors.danger
+        borderColor = theme.colors.danger;
+        bgColor = theme.colors.dangerLight;
     } else if (focused) {
-        borderColor = theme.colors.primary
+        borderColor = theme.colors.text;
     }
 
     return StyleSheet.create({
@@ -76,36 +78,38 @@ const getStyles = (theme: Theme, focused: boolean, hasError: boolean) => {
             marginBottom: theme.spacing.m,
         },
         label: {
-            ...theme.typography.caption,
+            fontSize: 12,
+            fontWeight: '600',
             color: theme.colors.text,
-            marginBottom: theme.spacing.xs,
+            marginBottom: 6,
         },
         field: {
             minHeight: 48,
             borderRadius: theme.borderRadius.m,
-            borderWidth: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: theme.spacing.m,
-            backgroundColor: theme.colors.inputBackground,
+            borderWidth: 1.5,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            backgroundColor: bgColor,
             borderColor: borderColor,
         },
         side: {
             marginRight: theme.spacing.s,
         },
         input: {
-            ...theme.typography.body,
+            fontSize: 14,
+            fontWeight: '400',
             flex: 1,
             color: theme.colors.text,
-            paddingVertical: theme.spacing.s,
+            paddingVertical: 12,
         },
         helperText: {
-            ...theme.typography.caption,
+            fontSize: 11,
             color: theme.colors.textMuted,
             marginTop: theme.spacing.xs,
         },
         errorText: {
-            ...theme.typography.caption,
+            fontSize: 11,
             color: theme.colors.danger,
             marginTop: theme.spacing.xs,
         },

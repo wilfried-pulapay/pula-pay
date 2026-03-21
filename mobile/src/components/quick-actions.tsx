@@ -1,7 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { useTheme } from "../theme";
 import { useStyles } from "../hooks/use-styles";
 import type { Theme } from "../theme/types";
 
@@ -58,10 +57,12 @@ const quickActionsData: QuickAction[] = [
   },
 ];
 
+// Icon color per action index (deposit, receive, transfer, withdraw, recharge, bills)
+const ACTION_ICON_COLORS = ['#FF6B00', '#1F8A70', '#0D0D0D', '#6B6B6B', '#6B6B6B', '#6B6B6B'];
+
 export default function QuickActions() {
   const { t } = useTranslation();
   const router = useRouter();
-  const theme = useTheme();
   const styles = useStyles(getStyles);
 
   const goTo = (route: string) => {
@@ -80,21 +81,24 @@ export default function QuickActions() {
       </View>
 
       <View style={styles.grid}>
-        {quickActionsData.map((action) => (
+        {quickActionsData.map((action, idx) => {
+          const iconColor = ACTION_ICON_COLORS[idx] ?? '#6B6B6B';
+          const isDisabled = action.route === '#';
+          return (
           <TouchableOpacity
             key={action.titleKey}
-            style={styles.card}
+            style={[styles.card, isDisabled && styles.cardDisabled]}
             onPress={() => goTo(action.route)}
             activeOpacity={0.8}
           >
-            <View style={styles.iconWrap}>
+            <View style={[styles.iconWrap, { backgroundColor: iconColor + '1F' }]}>
               <Text style={styles.icon}>{action.emoji}</Text>
             </View>
             <Text style={styles.cardTitle}>{t(action.titleKey)}</Text>
             <Text style={styles.cardSubtitle}>{t(action.subtitleKey)}</Text>
-            <Text style={styles.cardDesc}>{t(action.descriptionKey)}</Text>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
     </View>
   );
@@ -102,70 +106,64 @@ export default function QuickActions() {
 
 const getStyles = (theme: Theme) => StyleSheet.create({
   container: {
-    paddingHorizontal: theme.spacing.s,
-    marginTop: theme.spacing.xs,
+    paddingHorizontal: 16,
+    marginBottom: 24,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.xs,
+    marginBottom: 12,
   },
   title: {
-    ...theme.typography.h2,
-    color: theme.colors.text,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    color: theme.colors.textMuted,
   },
   seeAll: {
+    fontSize: 12,
+    fontWeight: '500',
     color: theme.colors.primary,
-    fontWeight: '600',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 12,
   },
   card: {
-    width: '48%',
-    backgroundColor: theme.colors.surface,
+    width: '47%',
+    backgroundColor: theme.colors.surfaceAlt,
     borderRadius: theme.borderRadius.l,
-    padding: theme.spacing.s,
-    marginBottom: theme.spacing.s,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  cardDisabled: {
+    opacity: 0.4,
   },
   iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: theme.borderRadius.l,
-    backgroundColor: theme.colors.surfaceVariant,
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.m,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.xs,
+    marginBottom: 8,
   },
   icon: {
-    fontSize: 26,
+    fontSize: 20,
   },
   cardTitle: {
-    ...theme.typography.body,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: theme.colors.text,
     marginBottom: 2,
-    textAlign: 'center',
   },
   cardSubtitle: {
-    ...theme.typography.caption,
-    color: theme.colors.primary,
-    fontWeight: '600',
-    marginBottom: theme.spacing.xs,
-    textAlign: 'center',
-  },
-  cardDesc: {
-    ...theme.typography.caption,
+    fontSize: 10,
+    fontWeight: '400',
     color: theme.colors.textMuted,
-    textAlign: 'center',
   },
 });

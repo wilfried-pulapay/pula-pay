@@ -1,30 +1,26 @@
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Screen from "../../components/screen";
-import { useAuthStore } from "../../store/authStore";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../../lib/auth";
 
-import QuickActions from "@/src/components/quick-actions";
 import RecentTransactions from "@/src/components/recent-transactions";
 import SafeComponent from "@/src/components/safe-component";
 import WalletSummary from "@/src/components/wallet-summary";
 import { useStyles } from "@/src/hooks/use-styles";
 import type { Theme } from "@/src/theme/types";
-import type { User } from "@/src/store/types";
 
 export default function Dashboard() {
     const { t } = useTranslation();
     const styles = useStyles(getStyles);
-    const user = useAuthStore((s) => s.user) as User | null;
-    const greeting = user && (user.name || user.firstName)
-        ? `Bonjour ${user.name || user.firstName} 👋`
-        : "Bonjour 👋";
+    const { user } = useAuth();
 
     return (
         <Screen scroll contentStyle={styles.container}>
             <SafeComponent>
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.greeting}>{greeting}</Text>
+                        <Text style={styles.greetingMuted}>Bonjour,</Text>
+                        <Text style={styles.greeting}>{user?.name ?? 'Bienvenue'}</Text>
                         <Text style={styles.date}>{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
                     </View>
                 </View>
@@ -61,32 +57,38 @@ export default function Dashboard() {
 
 const getStyles = (theme: Theme) => StyleSheet.create({
     container: {
-        padding: theme.spacing.m,
         paddingBottom: theme.spacing.xxl,
-        alignItems: 'center',
     },
     header: {
         width: '100%',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: theme.spacing.s,
+        paddingHorizontal: 24,
+        paddingTop: 20,
+        paddingBottom: 16,
+    },
+    greetingMuted: {
+        fontSize: 13,
+        fontWeight: '300',
+        color: theme.colors.textMuted,
     },
     greeting: {
-        ...theme.typography.h1,
+        fontSize: 22,
+        fontWeight: '700',
+        letterSpacing: -0.5,
         color: theme.colors.text,
     },
     date: {
-        ...theme.typography.caption,
+        fontSize: 12,
         color: theme.colors.textMuted,
-        marginTop: theme.spacing.xs,
+        marginTop: 2,
     },
     promoCard: {
-        width: '100%',
-        backgroundColor: theme.colors.primary,
+        marginHorizontal: 16,
+        marginBottom: 24,
+        backgroundColor: theme.colors.surfaceAlt,
         borderRadius: theme.borderRadius.l,
-        padding: theme.spacing.m,
-        marginVertical: theme.spacing.s,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        padding: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -95,22 +97,24 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         flex: 1,
     },
     promoTitle: {
-        ...theme.typography.h2,
-        color: theme.colors.onPrimary,
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.colors.text,
         marginBottom: theme.spacing.xs,
     },
     promoSubtitle: {
-        ...theme.typography.body,
-        color: theme.colors.onPrimary,
+        fontSize: 12,
+        color: theme.colors.textMuted,
     },
     promoButton: {
-        backgroundColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: theme.colors.primary,
         paddingVertical: theme.spacing.xs,
         paddingHorizontal: theme.spacing.s,
-        borderRadius: theme.borderRadius.m,
+        borderRadius: theme.borderRadius.full,
     },
     promoButtonText: {
-        color: theme.colors.onPrimary,
-        fontWeight: '700',
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 12,
     },
 });

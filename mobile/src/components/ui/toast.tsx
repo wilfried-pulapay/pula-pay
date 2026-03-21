@@ -67,11 +67,31 @@ export function Toast({ id, type, message, duration = 4000, onDismiss }: ToastPr
 
     const Icon = TOAST_ICONS[type];
 
-    const backgroundColor = {
-        success: theme.colors.success || '#10b981',
-        error: theme.colors.danger,
-        warning: '#f59e0b',
-        info: theme.colors.primary,
+    const statusColors = {
+        success: {
+            bg: theme.colors.successLight,
+            border: theme.colors.success,
+            iconColor: theme.colors.success,
+            textColor: '#166357',
+        },
+        error: {
+            bg: theme.colors.dangerLight,
+            border: theme.colors.danger,
+            iconColor: theme.colors.danger,
+            textColor: theme.colors.danger,
+        },
+        warning: {
+            bg: theme.colors.warningLight,
+            border: theme.colors.warning,
+            iconColor: theme.colors.warning,
+            textColor: '#8B5E00',
+        },
+        info: {
+            bg: theme.colors.surfaceAlt,
+            border: theme.colors.border,
+            iconColor: theme.colors.text,
+            textColor: theme.colors.textMuted,
+        },
     }[type];
 
     return (
@@ -79,18 +99,19 @@ export function Toast({ id, type, message, duration = 4000, onDismiss }: ToastPr
             style={[
                 styles.container,
                 {
-                    backgroundColor,
+                    backgroundColor: statusColors.bg,
+                    borderColor: statusColors.border,
                     opacity,
                     transform: [{ translateY }],
                 },
             ]}
         >
-            <Icon size={20} color="#fff" />
-            <Text style={styles.message} numberOfLines={3}>
+            <Icon size={20} color={statusColors.iconColor} />
+            <Text style={[styles.message, { color: statusColors.textColor }]} numberOfLines={3}>
                 {message}
             </Text>
             <TouchableOpacity onPress={handleDismiss} style={styles.closeButton}>
-                <X size={18} color="#fff" />
+                <X size={18} color={statusColors.textColor} />
             </TouchableOpacity>
         </Animated.View>
     );
@@ -100,24 +121,19 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: 18,
+        paddingVertical: 14,
         borderRadius: 12,
+        borderWidth: 1,
         marginBottom: 8,
         marginHorizontal: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
         gap: 12,
     },
     message: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '500',
-        color: '#fff',
-        lineHeight: 20,
+        lineHeight: 18,
     },
     closeButton: {
         padding: 4,

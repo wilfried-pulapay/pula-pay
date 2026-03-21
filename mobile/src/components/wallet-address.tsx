@@ -109,14 +109,13 @@ export default function WalletAddress({
 
 const getStyles = (theme: Theme) => StyleSheet.create({
     container: {
-        padding: theme.spacing.s,
-        backgroundColor: theme.colors.surface,
+        padding: 16,
         borderRadius: theme.borderRadius.m,
         borderWidth: 1,
-        borderColor: theme.colors.outline,
+        borderColor: theme.colors.border,
     },
     blockchainLabel: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.textMuted,
         marginBottom: theme.spacing.xs,
     },
@@ -126,9 +125,10 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         justifyContent: 'space-between',
     },
     addressText: {
-        ...theme.typography.body,
-        color: theme.colors.text,
+        fontSize: 12,
+        color: theme.colors.textMuted,
         fontFamily: 'monospace',
+        letterSpacing: 0.5,
         flex: 1,
     },
     actions: {
@@ -139,12 +139,12 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         padding: theme.spacing.xs,
     },
     copiedText: {
-        ...theme.typography.caption,
+        fontSize: 11,
         color: theme.colors.success,
         marginTop: theme.spacing.xs,
     },
     errorText: {
-        ...theme.typography.body,
+        fontSize: 14,
         color: theme.colors.textMuted,
     },
 });

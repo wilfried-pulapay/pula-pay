@@ -18,7 +18,7 @@ export default function RecentTransactions() {
     const { t } = useTranslation();
     const theme = useTheme();
     const styles = useStyles(getStyles);
-    const { transactions } = useWalletStore();
+    const { transactions, walletNotFound } = useWalletStore();
 
     const recentTransactions = useMemo(() => {
         return sortByDateDesc(transactions).slice(0, MAX_RECENT_TRANSACTIONS);
@@ -40,9 +40,11 @@ export default function RecentTransactions() {
                     </View>
                     <Text style={styles.emptyTitle}>{t('transactions.emptyTitle')}</Text>
                     <Text style={styles.emptySubtitle}>{t('transactions.emptySubtitle')}</Text>
-                    <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/wallet/deposit')}>
-                        <Text style={styles.primaryButtonText}>{t('transactions.firstTransaction')}</Text>
-                    </TouchableOpacity>
+                    {!walletNotFound && (
+                        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/wallet/deposit')}>
+                            <Text style={styles.primaryButtonText}>{t('transactions.firstTransaction')}</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         );
@@ -68,52 +70,48 @@ export default function RecentTransactions() {
 
 const getStyles = (theme: Theme) => StyleSheet.create({
     card: {
-        margin: theme.spacing.s,
-        borderRadius: theme.borderRadius.l,
-        backgroundColor: theme.colors.surface,
-        overflow: 'hidden',
-        shadowColor: theme.colors.text,
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 2,
-        paddingBottom: theme.spacing.xs,
+        paddingHorizontal: 16,
+        marginBottom: 24,
     },
     headerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: theme.spacing.m,
-        paddingTop: theme.spacing.s,
-        paddingBottom: theme.spacing.xs,
+        marginBottom: 12,
     },
     title: {
-        ...theme.typography.h2,
-        color: theme.colors.text,
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        color: theme.colors.textMuted,
     },
     seeAll: {
+        fontSize: 12,
+        fontWeight: '500',
         color: theme.colors.primary,
-        fontWeight: '600',
     },
     emptyBody: {
         padding: theme.spacing.l,
         alignItems: 'center',
     },
     emptyIcon: {
-        width: 64,
-        height: 64,
-        borderRadius: theme.borderRadius.l,
-        backgroundColor: theme.colors.surfaceVariant,
+        width: 48,
+        height: 48,
+        borderRadius: theme.borderRadius.m,
+        backgroundColor: theme.colors.surfaceAlt,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: theme.spacing.s,
     },
     emptyTitle: {
-        ...theme.typography.h2,
-        color: theme.colors.text,
+        fontSize: 14,
+        color: theme.colors.textMuted,
+        textAlign: 'center',
         marginBottom: theme.spacing.xs,
     },
     emptySubtitle: {
-        ...theme.typography.caption,
+        fontSize: 12,
         color: theme.colors.textMuted,
         textAlign: 'center',
         marginBottom: theme.spacing.s,
@@ -122,13 +120,12 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         backgroundColor: theme.colors.primary,
         paddingHorizontal: theme.spacing.m,
         paddingVertical: theme.spacing.s,
-        borderRadius: theme.borderRadius.m,
+        borderRadius: theme.borderRadius.full,
     },
     primaryButtonText: {
         color: theme.colors.onPrimary,
-        fontWeight: '700',
+        fontWeight: '600',
+        fontSize: 13,
     },
-    list: {
-        paddingHorizontal: theme.spacing.xs,
-    },
+    list: {},
 });

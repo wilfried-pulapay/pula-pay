@@ -57,14 +57,13 @@ const getStyles = (theme: Theme) => StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: theme.spacing.m,
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.m,
-        marginBottom: theme.spacing.s,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
     },
     iconWrap: {
-        width: 44,
-        height: 44,
+        width: 40,
+        height: 40,
         borderRadius: theme.borderRadius.m,
         alignItems: 'center',
         justifyContent: 'center',
@@ -74,18 +73,19 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         flex: 1,
     },
     type: {
-        color: theme.colors.text,
+        fontSize: 13,
         fontWeight: '600',
-        fontSize: 14,
+        color: theme.colors.text,
+        letterSpacing: -0.2,
     },
     ref: {
+        fontSize: 11,
         color: theme.colors.textMuted,
-        fontSize: 12,
         marginTop: 2,
     },
     date: {
-        color: theme.colors.textMuted,
         fontSize: 11,
+        color: theme.colors.textMuted,
         marginTop: 2,
     },
     rightCol: {
@@ -104,12 +104,14 @@ const getStyles = (theme: Theme) => StyleSheet.create({
     },
     statusBadge: {
         marginTop: 4,
-        paddingHorizontal: theme.spacing.xs,
-        paddingVertical: 2,
-        borderRadius: theme.borderRadius.s,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: theme.borderRadius.full,
     },
     statusText: {
-        fontSize: 10,
-        fontWeight: '600',
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
     },
 });

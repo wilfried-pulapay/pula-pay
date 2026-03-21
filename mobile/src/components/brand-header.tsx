@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Bell } from "lucide-react-native";
 import { useTheme } from "@/src/theme";
@@ -17,15 +16,10 @@ export default function BrandHeader() {
     return (
         <View style={styles.container}>
             <View style={styles.leftSection}>
-                <LinearGradient
-                    colors={[theme.colors.primary, '#06b6d4']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.gradient}
-                >
-                    <Text style={styles.logo}>P</Text>
-                </LinearGradient>
-                <Text style={styles.brandName}>Pulapay</Text>
+                <Text style={styles.brandName}>
+                    <Text style={styles.brandPula}>Pula</Text>
+                    <Text style={styles.brandPay}>pay</Text>
+                </Text>
             </View>
             <TouchableOpacity
                 style={styles.bellButton}
@@ -52,29 +46,22 @@ const getStyles = (theme: Theme, topInset: number) => StyleSheet.create({
         paddingHorizontal: theme.spacing.m,
         backgroundColor: theme.colors.background,
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.outline,
+        borderBottomColor: theme.colors.border,
     },
     leftSection: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: theme.spacing.s,
-    },
-    gradient: {
-        width: 40,
-        height: 40,
-        borderRadius: theme.borderRadius.l,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    logo: {
-        fontSize: 20,
-        color: theme.colors.onPrimary,
-        fontWeight: 'bold',
     },
     brandName: {
-        ...theme.typography.h2,
+        fontSize: 22,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+    },
+    brandPula: {
         color: theme.colors.text,
-        fontWeight: 'bold',
+    },
+    brandPay: {
+        color: theme.colors.primary,
     },
     bellButton: {
         padding: theme.spacing.xs,

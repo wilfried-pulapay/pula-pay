@@ -19,24 +19,19 @@
     },
     "login": {
         "title": "Connexion",
-        "phone": "Numéro de téléphone",
+        "email": "Email",
         "password": "Mot de passe",
         "button": "Se connecter",
         "goToRegister": "Créer un compte"
     },
     "register": {
         "title": "Créer un compte",
-        "phone": "Numéro de téléphone",
+        "name": "Nom complet",
+        "email": "Email",
         "password": "Mot de passe",
         "confirmPassword": "Confirmer le mot de passe",
         "button": "S'inscrire",
-        "goToLogin": "Déjà un compte ? Se connecter",
-        "verifyPhone": "Vérifiez votre téléphone",
-        "otpSent": "Entrez le code envoyé à votre téléphone",
-        "otpSending": "Envoi du code...",
-        "otpSentSuccess": "Code envoyé ! Expire dans {{expiresIn}}",
-        "verifyButton": "Vérifier le code",
-        "resendOtp": "Renvoyer le code"
+        "goToLogin": "Déjà un compte ? Se connecter"
     },
     "home": {
         "welcome": "Bienvenue, {{phone}}",
@@ -54,9 +49,9 @@
         "refresh": "Rafraîchir",
         "refreshing": "Rafraîchissement...",
         "type": {
-            "DEPOSIT_ONRAMP": "Dépôt Mobile Money",
+            "DEPOSIT_ONRAMP": "Dépôt",
             "DEPOSIT_CRYPTO": "Dépôt Crypto",
-            "WITHDRAWAL_OFFRAMP": "Retrait Mobile Money",
+            "WITHDRAWAL_OFFRAMP": "Retrait",
             "WITHDRAWAL_CRYPTO": "Retrait Crypto",
             "TRANSFER_P2P": "Transfert P2P",
             "REFUND": "Remboursement",
@@ -96,40 +91,43 @@
     },
     "deposit": {
         "title": "Recharger le portefeuille",
-        "success": "Recharge effectuée",
-        "selectMethod": "Choisir une méthode",
-        "mtn_momo": "MTN Mobile Money",
-        "orange_money": "Orange Money",
+        "success": "Dépôt initié",
+        "selectMethod": "Choisir un moyen de paiement",
+        "paymentMethod": "Moyen de paiement",
+        "card": "Carte bancaire",
+        "ach_bank_account": "Virement bancaire",
+        "apple_pay": "Apple Pay",
         "crypto": "Recevoir Crypto",
-        "method": "Méthode",
-        "phone": "Numéro associé",
         "amount": "Montant",
         "amountPlaceholder": "Ex: 100.00",
         "equivalentUsdc": "Équivalent USDC",
         "exchangeRateUsed": "Taux appliqué",
         "submit": "Recharger",
-        "submitting": "Envoi...",
+        "submitting": "Traitement...",
         "viewTransactions": "Voir transactions",
         "txId": "Référence",
-        "methodNotSupported": "Méthode non encore supportée",
+        "openPayment": "Chargement de la page de paiement...",
+        "completingPayment": "Finalisez votre paiement",
         "checkingWallet": "Vérification du portefeuille...",
         "walletActivated": "Portefeuille activé avec succès !",
         "walletNotActive": "Le portefeuille n'est pas actif. Veuillez réessayer dans quelques instants."
     },
     "withdraw": {
         "title": "Demande de retrait",
-        "success": "Retrait effectué",
+        "success": "Retrait initié",
         "availableBalance": "Solde disponible",
         "method": "Moyen de paiement",
-        "phone": "Numéro associé",
+        "ach_bank_account": "Virement bancaire",
+        "card": "Carte bancaire",
         "amount": "Montant à retirer",
         "amountUsdc": "Équivalent USDC",
         "amountPlaceholder": "Ex: 100.00",
         "submit": "Retirer",
-        "submitting": "Envoi...",
+        "submitting": "Traitement...",
         "viewTransactions": "Voir transactions",
         "txId": "Référence",
-        "methodNotSupported": "Méthode non encore supportée",
+        "openPayment": "Chargement de la page de paiement...",
+        "completingPayment": "Finalisez votre retrait",
         "insufficientFunds": "Solde insuffisant",
         "checkingWallet": "Vérification du portefeuille...",
         "walletActivated": "Portefeuille activé avec succès !",
@@ -180,15 +178,16 @@
     },
     "currencies": {
         "EUR": "Euro (EUR)",
-        "XOF": "Franc CFA (XOF)"
+        "XOF": "Franc CFA (XOF)",
+        "USD": "Dollar US (USD)"
     },
     "quickActions": {
         "title": "Services",
         "seeAll": "Voir tout",
         "deposit": {
             "title": "Recharger",
-            "subtitle": "Mobile Money",
-            "description": "MTN, Orange"
+            "subtitle": "Carte / Banque",
+            "description": "Via Coinbase"
         },
         "receive": {
             "title": "Recevoir",
@@ -202,8 +201,8 @@
         },
         "withdraw": {
             "title": "Retirer",
-            "subtitle": "Mobile Money",
-            "description": "Vers MoMo"
+            "subtitle": "Banque / Carte",
+            "description": "Vers compte bancaire"
         },
         "recharge": {
             "title": "Recharge",
@@ -222,7 +221,8 @@
         "title": "Erreur",
         "depositFailed": "Erreur lors du dépôt",
         "withdrawFailed": "Erreur lors du retrait",
-        "transferFailed": "Erreur lors du transfert"
+        "transferFailed": "Erreur lors du transfert",
+        "rateLimited": "Trop de requêtes. Veuillez patienter un instant."
     },
     "validation": {
         "fillAllFields": "Veuillez remplir tous les champs.",
@@ -234,6 +234,7 @@
         "VALIDATION_ERROR": "Les données saisies sont invalides. Veuillez vérifier et réessayer.",
         "USER_EXISTS": "Ce numéro de téléphone est déjà enregistré.",
         "PHONE_EXISTS": "Ce numéro de téléphone est déjà enregistré.",
+        "PHONE_ALREADY_REGISTERED": "Ce numéro de téléphone est déjà enregistré.",
         "EMAIL_EXISTS": "Cet email est déjà enregistré.",
         "ALREADY_VERIFIED": "Votre compte est déjà vérifié.",
         "SELF_TRANSFER": "Vous ne pouvez pas effectuer un transfert vers vous-même.",
@@ -250,6 +251,10 @@
         "WALLET_FROZEN": "Votre portefeuille est temporairement gelé. Veuillez contacter le support.",
         "CONFLICT": "Un conflit est survenu. Veuillez réessayer.",
         "INSUFFICIENT_FUNDS": "Solde insuffisant pour effectuer cette opération.",
+        "RATE_LIMITED": "Trop de requêtes. Veuillez patienter un instant et réessayer.",
+        "INVALID_STATE_TRANSITION": "Cette opération ne peut pas être effectuée dans l'état actuel.",
+        "LEDGER_IMBALANCE": "Une erreur comptable est survenue. Veuillez contacter le support.",
+        "REGISTRATION_FAILED": "L'inscription a échoué. Veuillez réessayer.",
         "INTERNAL_ERROR": "Une erreur serveur est survenue. Veuillez réessayer plus tard.",
         "NETWORK_ERROR": "Impossible de se connecter au serveur. Vérifiez votre connexion internet.",
         "UNKNOWN_ERROR": "Une erreur inattendue est survenue. Veuillez réessayer."

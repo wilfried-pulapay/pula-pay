@@ -29,6 +29,11 @@ export type ApiErrorCode =
     | "WALLET_PENDING"
     | "CONFLICT"
     | "INSUFFICIENT_FUNDS"
+    | "RATE_LIMITED"
+    | "INVALID_STATE_TRANSITION"
+    | "LEDGER_IMBALANCE"
+    | "PHONE_ALREADY_REGISTERED"
+    | "REGISTRATION_FAILED"
     | "INTERNAL_ERROR"
     | "NETWORK_ERROR"
     | "UNKNOWN_ERROR";
@@ -40,6 +45,11 @@ export function getApiErrorCode(error: unknown): ApiErrorCode {
     // Network error (no response)
     if (!axiosError.response) {
         return "NETWORK_ERROR";
+    }
+
+    // Rate limited
+    if (axiosError.response.status === 429) {
+        return "RATE_LIMITED";
     }
 
     // Extract error code from response
@@ -84,6 +94,11 @@ function isKnownErrorCode(code: string): code is ApiErrorCode {
         "WALLET_PENDING",
         "CONFLICT",
         "INSUFFICIENT_FUNDS",
+        "RATE_LIMITED",
+        "INVALID_STATE_TRANSITION",
+        "LEDGER_IMBALANCE",
+        "PHONE_ALREADY_REGISTERED",
+        "REGISTRATION_FAILED",
         "INTERNAL_ERROR",
     ];
     return knownCodes.includes(code as ApiErrorCode);

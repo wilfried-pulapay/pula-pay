@@ -15,9 +15,9 @@ type BalanceDisplayProps = {
 };
 
 const SIZE_CONFIG = {
-    small: { primary: 20, secondary: 12 },
-    medium: { primary: 28, secondary: 14 },
-    large: { primary: 36, secondary: 16 },
+    small:  { primary: 18, secondary: 11, weight: '600' as const, spacing: 0 },
+    medium: { primary: 28, secondary: 12, weight: '700' as const, spacing: -1 },
+    large:  { primary: 44, secondary: 13, weight: '800' as const, spacing: -2 },
 };
 
 export default function BalanceDisplay({
@@ -47,7 +47,11 @@ export default function BalanceDisplay({
 
     return (
         <View style={styles.container}>
-            <Text style={[styles.primaryBalance, { fontSize: sizeConfig.primary }]}>
+            <Text style={[styles.primaryBalance, {
+                fontSize: sizeConfig.primary,
+                fontWeight: sizeConfig.weight,
+                letterSpacing: sizeConfig.spacing,
+            }]}>
                 {formattedDisplay}
             </Text>
             {showUsdc && (
@@ -65,13 +69,10 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         justifyContent: 'center',
     },
     primaryBalance: {
-        ...theme.typography.h1,
         color: theme.colors.text,
-        fontWeight: 'bold',
     },
     secondaryBalance: {
-        ...theme.typography.caption,
-        color: theme.colors.secondary,
+        color: theme.colors.textMuted,
         marginTop: theme.spacing.xs,
     },
 });
