@@ -17,6 +17,7 @@ import { ResolveRecipientHandler, ResolveRecipientResult } from '../../../applic
 import { GetOnrampQuoteHandler } from '../../../application/queries/GetOnrampQuoteHandler';
 import { GetOfframpQuoteHandler } from '../../../application/queries/GetOfframpQuoteHandler';
 import { OnrampQuoteResult, OfframpQuoteResult } from '../../../domain/ports/QuoteProvider';
+import { GetCircleWalletsHandler } from '../../../application/queries/GetCircleWalletsHandler';
 
 // Validation schemas
 const blockchainSchema = z.object({
@@ -99,7 +100,8 @@ export class WalletController {
     private readonly addressHandler: GetWalletAddressHandler,
     private readonly resolveRecipientHandler: ResolveRecipientHandler,
     private readonly onrampQuoteHandler: GetOnrampQuoteHandler,
-    private readonly offrampQuoteHandler: GetOfframpQuoteHandler
+    private readonly offrampQuoteHandler: GetOfframpQuoteHandler,
+    private readonly circleWalletsHandler: GetCircleWalletsHandler
   ) {}
 
   /**
@@ -386,12 +388,8 @@ export class WalletController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const balanceResult = await this.balanceHandler.execute({
-        userId: req.user!.id,
-      });
-
       const result = await this.syncStatusHandler.execute({
-        walletId: balanceResult.walletId,
+        userId: req.user!.id,
       });
 
       res.json({
@@ -437,6 +435,29 @@ export class WalletController {
         paymentCurrency: query.currency,
         country: query.country,
         paymentMethod: query.paymentMethod,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+        meta: {
+          requestId: req.headers['x-request-id'] as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getCircleWallets = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const result = await this.circleWalletsHandler.execute({
+        userId: req.user!.id,
       });
 
       res.json({

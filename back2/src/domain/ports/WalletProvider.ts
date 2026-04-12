@@ -20,25 +20,6 @@ export interface WalletSetupResult {
   challengeId: string;
 }
 
-export interface ConfirmWalletSetupParams {
-  userToken: string;
-}
-
-// ─── Legacy wallet creation (kept for interface) ─────────────────────────────
-
-export interface CreateWalletParams {
-  userId: string;
-  idempotencyKey: string;
-  blockchain: Blockchain;
-}
-
-export interface WalletCreationResult {
-  circleWalletId: string;
-  walletSetId?: string;
-  address: string;
-  status: 'pending' | 'active';
-}
-
 // ─── Balance ──────────────────────────────────────────────────────────────────
 
 export interface WalletBalance {
@@ -62,25 +43,10 @@ export interface TransferChallengeResult {
   challengeId: string;
 }
 
-// ─── Legacy transfer params ───────────────────────────────────────────────────
-
-export interface TransferParams {
-  fromWalletId: string;
-  toAddress: string;
-  amount: string;
-  tokenId: string;
-  idempotencyKey: string;
-}
-
-export interface TransferResult {
-  id: string;
-  status: 'pending' | 'complete' | 'failed';
-  txHash?: string;
-}
-
 // ─── Fee estimation ───────────────────────────────────────────────────────────
 
 export interface EstimateFeeParams {
+  userToken: string;
   fromWalletId: string;
   toAddress: string;
   amount: string;
@@ -101,6 +67,13 @@ export interface WalletDetails {
   walletSetId?: string;
 }
 
+// ─── Challenge status ─────────────────────────────────────────────────────────
+
+export interface ChallengeStatusResult {
+  status: string;
+  resultType?: string;
+}
+
 // ─── Port ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -114,14 +87,18 @@ export interface WalletProvider {
   // Wallet setup (two-step: initiate → mobile resolves challenge → confirm)
   initiateWalletSetup(params: InitiateWalletSetupParams): Promise<WalletSetupResult>;
   getWalletsForUser(userToken: string): Promise<WalletDetails[]>;
+  updateWalletRefIdForUser(circleWalletId: string, refId: string, userToken: string): Promise<void>;
 
   // Wallet info
-  getWallet(circleWalletId: string): Promise<WalletDetails>;
-  getBalance(circleWalletId: string): Promise<WalletBalance>;
+  getWallet(circleWalletId: string, userToken: string): Promise<WalletDetails>;
+  getBalance(circleWalletId: string, userToken: string): Promise<WalletBalance>;
+
+  // Challenge status
+  getChallengeStatus(challengeId: string, userToken: string): Promise<ChallengeStatusResult>;
 
   // Transfers (user-controlled: initiate → mobile resolves challenge)
   initiateTransfer(params: InitiateTransferParams): Promise<TransferChallengeResult>;
-  getTransferStatus(transferId: string): Promise<TransferResult>;
+  getTransferStatus(transferId: string): Promise<{ id: string; status: 'pending' | 'complete' | 'failed'; txHash?: string }>;
 
   // Fee estimation
   estimateFee(params: EstimateFeeParams): Promise<string>;

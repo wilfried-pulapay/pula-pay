@@ -37,6 +37,7 @@ describe('WalletController', () => {
       mockAddressHandler as any,
       mockResolveRecipientHandler as any,
       { execute: jest.fn() } as any,
+      { execute: jest.fn() } as any,
       { execute: jest.fn() } as any
     );
 

@@ -15,7 +15,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:prod": "prisma migrate deploy",
-    "prisma:studio": "prisma studio",
+    "prisma:studio": "prisma studio -p 5565",
     "prisma:seed": "ts-node prisma/seed.ts"
   },
   "keywords": [

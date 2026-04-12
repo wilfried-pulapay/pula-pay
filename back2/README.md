@@ -39,8 +39,8 @@ src/
 │   └── errors/                    # Domain exceptions
 │
 ├── application/                   # Use cases
-│   ├── commands/                  # 8 write handlers
-│   ├── queries/                   # 8 read handlers
+│   ├── commands/                  # 9 write handlers
+│   ├── queries/                   # 9 read handlers
 │   └── services/                  # CurrencyConversionService
 │
 ├── infrastructure/                # External world
@@ -161,16 +161,17 @@ Account types: `USER`, `ESCROW`, `FEES`, `LIQUIDITY`
 
 ### Commands (Write Operations)
 
-| Handler                      | Input                                          | What it does                                                    |
-|------------------------------|-------------------------------------------------|-----------------------------------------------------------------|
-| `CreateWalletHandler`        | userId, blockchain?                            | Creates Circle wallet, persists locally, activates if LIVE      |
-| `ActivateWalletHandler`      | circleWalletId                                 | Transitions wallet PENDING → ACTIVE                             |
-| `InitiateDepositHandler`     | userId, fiatAmount, fiatCurrency, country?, paymentMethod? | Creates tx, initiates Coinbase onramp, enqueues polling + expiry jobs, returns paymentUrl |
-| `ConfirmDepositHandler`      | providerRef, providerStatus                    | Credits wallet, creates ledger entries, enqueues faucet job     |
-| `InitiateWithdrawalHandler`  | userId, fiatAmount, fiatCurrency, country?, paymentMethod? | Validates balance+fee, initiates Coinbase offramp, enqueues jobs, returns paymentUrl |
-| `ExecuteTransferHandler`     | senderUserId, recipientPhone/address, amount   | Resolves wallets, executes Circle transfer, creates ledger      |
+| Handler                       | Input                                          | What it does                                                    |
+|-------------------------------|------------------------------------------------|-----------------------------------------------------------------|
+| `CreateWalletHandler`         | userId, blockchain?                            | Registers user in Circle, gets user token, initiates wallet setup challenge; returns challengeId + userToken + encryptionKey for mobile SDK |
+| `ConfirmWalletSetupHandler`   | userId, userToken, blockchain?                 | Called after mobile resolves PIN challenge; fetches wallet from Circle and persists locally |
+| `ActivateWalletHandler`       | circleWalletId                                 | Transitions wallet PENDING → ACTIVE                             |
+| `InitiateDepositHandler`      | userId, fiatAmount, fiatCurrency, country?, paymentMethod? | Creates tx, initiates Coinbase onramp, enqueues polling + expiry jobs, returns paymentUrl |
+| `ConfirmDepositHandler`       | providerRef, providerStatus                    | Credits wallet, creates ledger entries, enqueues faucet job     |
+| `InitiateWithdrawalHandler`   | userId, fiatAmount, fiatCurrency, country?, paymentMethod? | Validates balance+fee, initiates Coinbase offramp, enqueues jobs, returns paymentUrl |
+| `ExecuteTransferHandler`      | senderUserId, recipientPhone/address, amount   | Resolves wallets, initiates Circle transfer challenge, creates ledger |
 | `ExecuteSimpleTransferHandler`| senderUserId, recipientPhone, amount           | Simplified P2P without Circle API interaction                   |
-| `SyncWalletStatusHandler`    | userId                                         | Queries Circle for latest wallet state and balance              |
+| `SyncWalletStatusHandler`     | walletId                                       | Queries Circle for latest wallet state and balance              |
 
 ### Queries (Read Operations)
 
@@ -184,6 +185,7 @@ Account types: `USER`, `ESCROW`, `FEES`, `LIQUIDITY`
 | `ResolveRecipientHandler`      | phone? or address?                | Recipient wallet info                      |
 | `GetOnrampQuoteHandler`        | paymentAmount, paymentCurrency, country?, paymentMethod? | Fee preview for fiat→USDC deposit |
 | `GetOfframpQuoteHandler`       | sellAmount, cashoutCurrency, country?, paymentMethod?    | Fee preview for USDC→fiat withdrawal |
+| `GetCircleWalletsHandler`      | userId                                    | Fetches wallet details directly from Circle (app-scoped lookup) |
 
 ## API Endpoints
 
@@ -211,9 +213,11 @@ GET    /exchange-rates/preview       Conversion preview (?amount=100&from=EUR&to
 ### Wallet (Protected — requires session — `/api/v2`)
 
 ```
-POST   /wallet                       Create wallet (body: { blockchain? })
+POST   /wallet                       Initiate wallet setup (returns challengeId + userToken for mobile SDK)
+POST   /wallet/confirm-setup         Confirm after mobile resolves PIN challenge (body: { userToken, blockchain? })
 GET    /wallet/address               Get wallet address
 GET    /wallet/balance               Get balance (?currency=XOF)
+GET    /wallet/circle-wallets        Fetch wallet details directly from Circle
 POST   /wallet/sync-status           Sync status with Circle
 POST   /wallet/deposit               Initiate Coinbase onramp deposit
 POST   /wallet/withdraw              Initiate Coinbase offramp withdrawal
@@ -341,19 +345,30 @@ OnRampProvider: MTN_MOMO, COINBASE_CDP, MOOV_MONEY, CELTIIS, ORANGE_MONEY, WAVE,
 
 Adapter: `CircleWalletAdapter` implements `WalletProvider`
 
-| Method                  | Circle API                        | Purpose                      |
-|-------------------------|-----------------------------------|------------------------------|
-| `createWallet()`        | POST /developer/wallets           | Create blockchain wallet     |
-| `getWallet()`           | GET /wallets/{id}                 | Fetch wallet state           |
-| `getBalance()`          | GET /wallets/{id}/balances        | Query USDC balance           |
-| `transfer()`            | POST /developer/transactions/transfer | On-chain USDC transfer   |
-| `getTransferStatus()`   | GET /transactions/{id}            | Poll transfer status         |
-| `estimateFee()`         | POST /transactions/transfer/estimateFee | Gas fee estimate       |
-| `requestTestnetTokens()`| POST /faucet/drips                | Request testnet USDC + gas   |
+The integration uses Circle's **User-Controlled Wallet** model. Users hold their own private keys secured by a PIN set up via the Circle SDK on the mobile app. Operations requiring signing return a `challengeId` that the mobile must resolve with the user's PIN.
 
-Blockchain mapping: `POLYGON_AMOY → MATIC-AMOY`, `ETH_SEPOLIA → ETH-SEPOLIA`, etc.
+**Two-step wallet creation flow:**
+1. `POST /wallet` → backend calls `registerUser()` + `getUserToken()` + `initiateWalletSetup()` → returns `challengeId`, `userToken`, `encryptionKey` to mobile
+2. Mobile resolves challenge (PIN setup) via Circle SDK
+3. `POST /wallet/confirm-setup` → backend calls `getWalletsForUser()` → persists wallet locally
 
-Entity secret encrypted with RSA public key before each API call.
+| Method                    | Circle API                                    | Purpose                                      |
+|---------------------------|-----------------------------------------------|----------------------------------------------|
+| `registerUser()`          | POST /users                                   | Register user in Circle (idempotent)         |
+| `getUserToken()`          | POST /users/token                             | Short-lived session token + encryption key   |
+| `initiateWalletSetup()`   | POST /user/initialize                         | Start wallet creation — returns challengeId  |
+| `getWalletsForUser()`     | GET /user/wallets                             | List wallets via user token (post-challenge) |
+| `getWalletsByUserId()`    | GET /wallets?userId=...                       | App-scoped fallback wallet lookup            |
+| `getWallet()`             | GET /wallets/{id}                             | Fetch single wallet details                  |
+| `getBalance()`            | GET /wallets/{id}/balances                    | Query USDC balance                           |
+| `initiateTransfer()`      | POST /user/transactions/transfer              | Start transfer — returns challengeId         |
+| `getTransferStatus()`     | GET /transactions/{id}                        | Poll transfer status                         |
+| `getChallengeStatus()`    | GET /user/challenges/{id}                     | Check challenge resolution status            |
+| `estimateFee()`           | POST /user/transactions/transfer/estimateFee  | Gas fee estimate                             |
+
+Blockchain mapping: `BASE_SEPOLIA → BASE-SEPOLIA`, `BASE → BASE`. Legacy mappings: `POLYGON_AMOY → MATIC-AMOY`, `ETH_SEPOLIA → ETH-SEPOLIA`, `ARBITRUM_SEPOLIA → ARB-SEPOLIA`, etc.
+
+Auth: Bearer API key + `X-User-Token` header for user-scoped requests.
 
 ### Coinbase CDP Onramp/Offramp API
 
@@ -457,15 +472,13 @@ APPLE_CLIENT_SECRET=<oauth-secret>
 
 # Circle
 CIRCLE_API_KEY=TEST_API_KEY:...
-CIRCLE_RSA_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----..."
-CIRCLE_ENTITY_SECRET=<hex-encoded-secret>
-CIRCLE_WALLET_SET_ID=<uuid>
+CIRCLE_APP_ID=<circle-app-id>
 CIRCLE_ENVIRONMENT=sandbox    # sandbox | production
 
 # Blockchain
-DEFAULT_BLOCKCHAIN=POLYGON_AMOY
-USDC_TOKEN_ID_POLYGON_AMOY=<circle-token-id>
-USDC_TOKEN_ID_POLYGON=<circle-token-id>
+DEFAULT_BLOCKCHAIN=BASE_SEPOLIA
+USDC_TOKEN_ID_BASE_SEPOLIA=<circle-token-id>
+USDC_TOKEN_ID_BASE=<circle-token-id>
 
 # Exchange Rates
 EXCHANGE_RATE_PROVIDER=coingecko

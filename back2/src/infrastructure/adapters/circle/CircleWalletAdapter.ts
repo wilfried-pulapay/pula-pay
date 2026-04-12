@@ -1,19 +1,14 @@
-import { Blockchain } from '@prisma/client';
 import {
   WalletProvider,
-  CreateWalletParams,
-  WalletCreationResult,
   WalletBalance,
   WalletDetails,
-  TransferParams,
-  TransferResult,
-  EstimateFeeParams,
   UserTokenResult,
   InitiateWalletSetupParams,
   WalletSetupResult,
-  ConfirmWalletSetupParams,
   InitiateTransferParams,
   TransferChallengeResult,
+  EstimateFeeParams,
+  ChallengeStatusResult,
 } from '../../../domain/ports/WalletProvider';
 import { config } from '../../../shared/config';
 import { logger } from '../../../shared/utils/logger';
@@ -48,11 +43,9 @@ const BLOCKCHAIN_MAP: Record<string, string> = {
 export class CircleWalletAdapter implements WalletProvider {
   private readonly baseUrl = 'https://api.circle.com/v1/w3s';
   private readonly apiKey: string;
-  private readonly appId: string;
 
   constructor() {
     this.apiKey = config.circle.apiKey;
-    this.appId = config.circle.appId;
   }
 
   // ─── HTTP helper ────────────────────────────────────────────────────────────
@@ -66,9 +59,12 @@ export class CircleWalletAdapter implements WalletProvider {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${userToken ?? this.apiKey}`,
+      Authorization: `Bearer ${this.apiKey}`,
       'X-Request-Id': crypto.randomUUID(),
     };
+    if (userToken) {
+      headers['X-User-Token'] = userToken;
+    }
 
     const response = await fetch(url, {
       method,
@@ -136,6 +132,7 @@ export class CircleWalletAdapter implements WalletProvider {
         idempotencyKey: params.idempotencyKey,
         accountType: 'SCA',
         blockchains: [circleBlockchain],
+        refId: params.userId,
       },
       params.userToken
     );
@@ -150,11 +147,12 @@ export class CircleWalletAdapter implements WalletProvider {
 
   /**
    * Retrieves the wallets created for a user after their setup challenge was completed.
+   * Requires a valid user token (user-scoped).
    */
   async getWalletsForUser(userToken: string): Promise<WalletDetails[]> {
     const result = await this.request<{ wallets: CircleWallet[] }>(
       'GET',
-      '/user/wallets',
+      '/wallets',
       undefined,
       userToken
     );
@@ -162,30 +160,31 @@ export class CircleWalletAdapter implements WalletProvider {
     return (result.wallets ?? []).map((w) => this.mapWalletDetails(w));
   }
 
-  // ─── WalletProvider interface ────────────────────────────────────────────────
-
   /**
-   * @deprecated Use initiateWalletSetup + confirmWalletSetup instead.
-   * Kept for interface compatibility.
+   * Tags a wallet with a refId using the user-scoped API.
+   * Used to retroactively set refId on wallets created before this field was populated.
    */
-  async createWallet(_params: CreateWalletParams): Promise<WalletCreationResult> {
-    throw new Error(
-      'createWallet is not supported for user-controlled wallets. Use initiateWalletSetup.'
-    );
+  async updateWalletRefIdForUser(circleWalletId: string, refId: string, userToken: string): Promise<void> {
+    await this.request('PUT', `/wallets/${circleWalletId}`, { refId }, userToken);
+    logger.info({ circleWalletId, refId }, 'Circle wallet refId updated (user-scoped)');
   }
 
-  async getWallet(circleWalletId: string): Promise<WalletDetails> {
+  async getWallet(circleWalletId: string, userToken: string): Promise<WalletDetails> {
     const result = await this.request<{ wallet: CircleWallet }>(
       'GET',
-      `/wallets/${circleWalletId}`
+      `/wallets/${circleWalletId}`,
+      undefined,
+      userToken
     );
     return this.mapWalletDetails(result.wallet);
   }
 
-  async getBalance(circleWalletId: string): Promise<WalletBalance> {
+  async getBalance(circleWalletId: string, userToken: string): Promise<WalletBalance> {
     const result = await this.request<{ tokenBalances: CircleTokenBalance[] }>(
       'GET',
-      `/wallets/${circleWalletId}/balances`
+      `/wallets/${circleWalletId}/balances`,
+      undefined,
+      userToken
     );
 
     const usdcBalance = result.tokenBalances?.find((tb) => tb.token.symbol === 'USDC');
@@ -194,6 +193,18 @@ export class CircleWalletAdapter implements WalletProvider {
       tokenId: usdcBalance?.token.id ?? '',
       amount: usdcBalance?.amount ?? '0',
       blockchain: usdcBalance?.token.blockchain ?? '',
+    };
+  }
+
+  async getChallengeStatus(challengeId: string, userToken: string): Promise<ChallengeStatusResult> {
+    const result = await this.request<{ challenge: CircleChallenge }>(
+      'GET',
+      `/user/challenges/${challengeId}`,
+      undefined,
+      userToken
+    );
+    return {
+      status: result.challenge?.status ?? 'UNKNOWN',
     };
   }
 
@@ -224,17 +235,7 @@ export class CircleWalletAdapter implements WalletProvider {
     return { challengeId: result.challengeId };
   }
 
-  /**
-   * @deprecated Use initiateTransfer instead.
-   * Kept for interface compatibility with existing handlers that haven't migrated yet.
-   */
-  async transfer(params: TransferParams): Promise<TransferResult> {
-    throw new Error(
-      'transfer() is not supported for user-controlled wallets. Use initiateTransfer().'
-    );
-  }
-
-  async getTransferStatus(transferId: string): Promise<TransferResult> {
+  async getTransferStatus(transferId: string): Promise<{ id: string; status: 'pending' | 'complete' | 'failed'; txHash?: string }> {
     const result = await this.request<{ transaction: CircleTransaction }>(
       'GET',
       `/transactions/${transferId}`
@@ -249,27 +250,22 @@ export class CircleWalletAdapter implements WalletProvider {
     };
   }
 
-  async getChallengeStatus(challengeId: string, userToken: string): Promise<CircleChallenge> {
-    const result = await this.request<{ challenge: CircleChallenge }>(
-      'GET',
-      `/user/challenges/${challengeId}`,
-      undefined,
-      userToken
-    );
-    return result.challenge;
-  }
-
   async estimateFee(params: EstimateFeeParams): Promise<string> {
     const result = await this.request<{
       high: { networkFee: string };
       medium: { networkFee: string };
       low: { networkFee: string };
-    }>('POST', '/user/transactions/transfer/estimateFee', {
-      walletId: params.fromWalletId,
-      tokenId: params.tokenId,
-      destinationAddress: params.toAddress,
-      amounts: [params.amount],
-    });
+    }>(
+      'POST',
+      '/user/transactions/transfer/estimateFee',
+      {
+        walletId: params.fromWalletId,
+        tokenId: params.tokenId,
+        destinationAddress: params.toAddress,
+        amounts: [params.amount],
+      },
+      params.userToken
+    );
 
     return result.high?.networkFee ?? '0';
   }

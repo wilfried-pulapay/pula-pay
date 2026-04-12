@@ -4,7 +4,7 @@ import { WalletNotFoundError } from '../../domain/errors/WalletNotFoundError';
 import { logger } from '../../shared/utils/logger';
 
 export interface SyncWalletStatusCommand {
-  walletId: string;
+  userId: string;
 }
 
 export interface SyncWalletStatusResult {
@@ -15,8 +15,8 @@ export interface SyncWalletStatusResult {
 }
 
 /**
- * Syncs wallet status with Circle
- * Useful for manually fixing wallets stuck in PENDING state
+ * Syncs wallet status with Circle.
+ * Useful for manually fixing wallets stuck in PENDING state.
  */
 export class SyncWalletStatusHandler {
   constructor(
@@ -25,24 +25,22 @@ export class SyncWalletStatusHandler {
   ) {}
 
   async execute(command: SyncWalletStatusCommand): Promise<SyncWalletStatusResult> {
-    // Find wallet
-    const wallet = await this.walletRepo.findById(command.walletId);
+    const wallet = await this.walletRepo.findByUserId(command.userId);
     if (!wallet) {
-      throw new WalletNotFoundError(command.walletId);
+      throw new WalletNotFoundError(command.userId, 'userId');
     }
 
     const previousStatus = wallet.status;
 
     try {
-      // Get wallet details from Circle
-      const circleWallet = await this.walletProvider.getWallet(wallet.circleWalletId);
+      const { userToken } = await this.walletProvider.getUserToken(command.userId);
+      const circleWallet = await this.walletProvider.getWallet(wallet.circleWalletId, userToken);
 
       logger.info(
         { walletId: wallet.id, circleWalletId: wallet.circleWalletId, circleState: circleWallet.state },
         'Retrieved wallet status from Circle'
       );
 
-      // Update wallet status based on Circle state
       if (circleWallet.state === 'LIVE' && wallet.isPending()) {
         wallet.activate();
         await this.walletRepo.update(wallet);

@@ -42,7 +42,7 @@ export class CreateWalletHandler {
       throw new UserNotFoundError(command.userId);
     }
 
-    // If wallet already exists, get a fresh user token so mobile can re-confirm
+    // If wallet already exists locally, get a fresh user token so mobile can re-confirm
     const existingWallet = await this.walletRepo.findByUserId(command.userId);
     if (existingWallet) {
       logger.info({ userId: command.userId }, 'Wallet already exists — returning fresh user token');
@@ -61,7 +61,22 @@ export class CreateWalletHandler {
     // 2. Get a user token for this session
     const tokenResult = await this.walletProvider.getUserToken(command.userId);
 
-    // 3. Initiate wallet setup — returns challengeId for PIN setup on mobile
+    // 3. Check if a wallet already exists in Circle but was never persisted locally
+    //    (e.g. PIN was set but confirm-setup was never called). In that case skip
+    //    /user/initialize — it would fail — and signal the mobile to call confirm-setup directly.
+    const circleWallets = await this.walletProvider.getWalletsForUser(tokenResult.userToken);
+    const liveWallet = circleWallets.find((w) => w.state === 'LIVE');
+    if (liveWallet) {
+      logger.info({ userId: command.userId, circleWalletId: liveWallet.id }, 'Wallet exists in Circle but not locally — skipping initiate, signalling confirm-setup');
+      return {
+        challengeId: '',
+        userToken: tokenResult.userToken,
+        encryptionKey: tokenResult.encryptionKey,
+        appId: config.circle.appId,
+      };
+    }
+
+    // 4. Initiate wallet setup — returns challengeId for PIN setup on mobile
     const setupResult = await this.walletProvider.initiateWalletSetup({
       userId: command.userId,
       userToken: tokenResult.userToken,

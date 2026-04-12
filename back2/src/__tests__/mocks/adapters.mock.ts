@@ -4,7 +4,6 @@ import {
   WalletProvider,
   WalletBalance,
   WalletDetails,
-  TransferResult,
   EstimateFeeParams,
 } from '@domain/ports/WalletProvider';
 import {
@@ -27,8 +26,10 @@ export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
   getUserToken: jest.fn(),
   initiateWalletSetup: jest.fn(),
   getWalletsForUser: jest.fn(),
+  updateWalletRefIdForUser: jest.fn(),
   getWallet: jest.fn(),
   getBalance: jest.fn(),
+  getChallengeStatus: jest.fn(),
   initiateTransfer: jest.fn(),
   getTransferStatus: jest.fn(),
   estimateFee: jest.fn(),
@@ -54,12 +55,14 @@ export const createMockExchangeRateProvider = (): jest.Mocked<ExchangeRateProvid
   getRates: jest.fn(),
 });
 
+type TransferRecord = { id: string; status: 'pending' | 'complete' | 'failed'; txHash?: string };
+
 /**
  * In-memory Wallet Provider for integration tests (User-Controlled)
  */
 export class InMemoryWalletProvider implements WalletProvider {
   private wallets: Map<string, { balance: string; address: string }> = new Map();
-  private transfers: Map<string, TransferResult> = new Map();
+  private transfers: Map<string, TransferRecord> = new Map();
   private users: Set<string> = new Set();
   private idCounter = 1;
 
@@ -92,7 +95,11 @@ export class InMemoryWalletProvider implements WalletProvider {
     }];
   }
 
-  async getWallet(circleWalletId: string): Promise<WalletDetails> {
+  async updateWalletRefIdForUser(_circleWalletId: string, _refId: string, _userToken: string): Promise<void> {
+    // no-op in tests
+  }
+
+  async getWallet(circleWalletId: string, _userToken: string): Promise<WalletDetails> {
     const wallet = this.wallets.get(circleWalletId);
     return {
       id: circleWalletId,
@@ -104,13 +111,17 @@ export class InMemoryWalletProvider implements WalletProvider {
     };
   }
 
-  async getBalance(circleWalletId: string): Promise<WalletBalance> {
+  async getBalance(circleWalletId: string, _userToken: string): Promise<WalletBalance> {
     const wallet = this.wallets.get(circleWalletId);
     return {
       tokenId: 'usdc-token-base-sepolia',
       amount: wallet?.balance || '0',
       blockchain: 'BASE_SEPOLIA',
     };
+  }
+
+  async getChallengeStatus(_challengeId: string, _userToken: string): Promise<{ status: string }> {
+    return { status: 'COMPLETE' };
   }
 
   async initiateTransfer(params: { fromWalletId: string; amount: string }): Promise<{ challengeId: string }> {
@@ -122,7 +133,7 @@ export class InMemoryWalletProvider implements WalletProvider {
     return { challengeId: `challenge-transfer-${this.idCounter++}` };
   }
 
-  async getTransferStatus(transferId: string): Promise<TransferResult> {
+  async getTransferStatus(transferId: string): Promise<TransferRecord> {
     return (
       this.transfers.get(transferId) || {
         id: transferId,

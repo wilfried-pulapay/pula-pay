@@ -1,7 +1,7 @@
 import { Blockchain } from '@prisma/client';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
 import { UserRepository } from '../../domain/ports/repositories/UserRepository';
-import { WalletProvider } from '../../domain/ports/WalletProvider';
+import { WalletProvider, WalletDetails } from '../../domain/ports/WalletProvider';
 import { UserNotFoundError } from '../../domain/errors/UserNotFoundError';
 import { logger } from '../../shared/utils/logger';
 import { config } from '../../shared/config';
@@ -49,12 +49,33 @@ export class ConfirmWalletSetupHandler {
       };
     }
 
-    // Fetch wallets from Circle (created after challenge resolution)
-    const circleWallets = await this.walletProvider.getWalletsForUser(command.userToken);
+    // Fetch wallets from Circle — retry to handle the delay between PIN challenge
+    // resolution on the mobile and wallet creation completing on Circle's side.
+    const MAX_ATTEMPTS = 5;
+    const RETRY_DELAY_MS = 1500;
+    let circleWallets: WalletDetails[] = [];
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      circleWallets = await this.walletProvider.getWalletsForUser(command.userToken);
+
+      if (circleWallets.length) break;
+
+      if (attempt < MAX_ATTEMPTS) {
+        logger.warn({ userId: command.userId, attempt }, `No wallets found yet — retrying in ${RETRY_DELAY_MS}ms`);
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
+    }
 
     if (!circleWallets.length) {
       throw new Error('No wallets found in Circle after setup confirmation. Challenge may not be resolved yet.');
     }
+
+    // Tag any wallets missing a refId so future app-scoped lookups work correctly
+    await Promise.all(
+      circleWallets
+        .filter((w) => !w.refId)
+        .map((w) => this.walletProvider.updateWalletRefIdForUser(w.id, command.userId, command.userToken))
+    );
 
     // Pick the first LIVE wallet on the target blockchain (or just the first one)
     const circleWallet =

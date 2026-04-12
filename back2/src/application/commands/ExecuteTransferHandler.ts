@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { Currency, PrismaClient, Blockchain } from '@prisma/client';
+import { Currency, Blockchain } from '@prisma/client';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
@@ -40,7 +40,6 @@ export interface TransferResult {
 
 export class ExecuteTransferHandler {
   constructor(
-    private readonly prisma: PrismaClient,
     private readonly walletRepo: WalletRepository,
     private readonly txRepo: TransactionRepository,
     private readonly walletProvider: WalletProvider,
