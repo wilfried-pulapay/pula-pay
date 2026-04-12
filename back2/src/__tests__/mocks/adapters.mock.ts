@@ -32,6 +32,7 @@ export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
   getChallengeStatus: jest.fn(),
   initiateTransfer: jest.fn(),
   getTransferStatus: jest.fn(),
+  listWalletTransactions: jest.fn(),
   estimateFee: jest.fn(),
 });
 
@@ -140,6 +141,10 @@ export class InMemoryWalletProvider implements WalletProvider {
         status: 'failed',
       }
     );
+  }
+
+  async listWalletTransactions(_circleWalletId: string, _userToken: string): Promise<TransferRecord[]> {
+    return Array.from(this.transfers.values());
   }
 
   async estimateFee(_params: EstimateFeeParams): Promise<string> {

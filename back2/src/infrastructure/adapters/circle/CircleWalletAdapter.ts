@@ -9,6 +9,7 @@ import {
   TransferChallengeResult,
   EstimateFeeParams,
   ChallengeStatusResult,
+  CircleTransferInfo,
 } from '../../../domain/ports/WalletProvider';
 import { config } from '../../../shared/config';
 import { logger } from '../../../shared/utils/logger';
@@ -235,7 +236,7 @@ export class CircleWalletAdapter implements WalletProvider {
     return { challengeId: result.challengeId };
   }
 
-  async getTransferStatus(transferId: string): Promise<{ id: string; status: 'pending' | 'complete' | 'failed'; txHash?: string }> {
+  async getTransferStatus(transferId: string): Promise<CircleTransferInfo> {
     const result = await this.request<{ transaction: CircleTransaction }>(
       'GET',
       `/transactions/${transferId}`
@@ -248,6 +249,21 @@ export class CircleWalletAdapter implements WalletProvider {
       status: this.mapCircleStatus(tx?.state),
       txHash: tx?.txHash,
     };
+  }
+
+  async listWalletTransactions(circleWalletId: string, userToken: string): Promise<CircleTransferInfo[]> {
+    const result = await this.request<{ transactions: CircleTransaction[] }>(
+      'GET',
+      `/transactions?walletIds[]=${encodeURIComponent(circleWalletId)}&transactionType=OUTBOUND`,
+      undefined,
+      userToken
+    );
+
+    return (result.transactions ?? []).map((tx) => ({
+      id: tx.id,
+      status: this.mapCircleStatus(tx.state),
+      txHash: tx.txHash,
+    }));
   }
 
   async estimateFee(params: EstimateFeeParams): Promise<string> {
@@ -287,18 +303,16 @@ export class CircleWalletAdapter implements WalletProvider {
 
   private mapCircleStatus(state?: string): 'pending' | 'complete' | 'failed' {
     switch (state) {
+      // Terminal success — only COMPLETE is truly settled
       case 'COMPLETE':
-      case 'CONFIRMED':
-      case 'CLEARED':
         return 'complete';
+      // Terminal failures
       case 'FAILED':
       case 'CANCELLED':
       case 'DENIED':
-      case 'STUCK':
         return 'failed';
-      case 'INITIATED':
-      case 'QUEUED':
-      case 'SENT':
+      // Non-terminal: INITIATED, QUEUED, CLEARED, SENT, CONFIRMED, STUCK
+      // STUCK can be resolved (accelerate API) — let polling/expiry handle it
       default:
         return 'pending';
     }

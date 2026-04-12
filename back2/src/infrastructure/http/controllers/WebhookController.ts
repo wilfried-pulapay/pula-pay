@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { Queue } from 'bullmq';
 import { ApiResponse } from '../../../shared/types';
 import { ConfirmDepositHandler } from '../../../application/commands/ConfirmDepositHandler';
+import { ConfirmTransferHandler } from '../../../application/commands/ConfirmTransferHandler';
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
 import { OnRampProvider } from '../../../domain/ports/OnRampProvider';
 import { logger } from '../../../shared/utils/logger';
@@ -39,6 +40,7 @@ interface CircleWebhookPayload {
 export class WebhookController {
   constructor(
     private readonly confirmDepositHandler: ConfirmDepositHandler,
+    private readonly confirmTransferHandler: ConfirmTransferHandler,
     private readonly activateWalletHandler: ActivateWalletHandler,
     private readonly coinbaseCdpProvider: OnRampProvider,
     private readonly coinbasePollingQueue: Queue,
@@ -135,6 +137,9 @@ export class WebhookController {
 
       switch (payload.notificationType) {
         case 'transactions.outbound':
+          await this.handleTransferStateChange(payload);
+          break;
+
         case 'transactions.inbound':
           break;
 
@@ -181,6 +186,42 @@ export class WebhookController {
       }
     } catch (err) {
       logger.warn({ msg: 'Failed to cancel jobs after webhook', err });
+    }
+  }
+
+  private async handleTransferStateChange(payload: CircleWebhookPayload): Promise<void> {
+    const { id, walletId, state, txHash } = payload.notification;
+
+    // Only act on terminal states. CONFIRMED/CLEARED are intermediate (not settled).
+    // STUCK is non-terminal (can be accelerated). See Circle transaction states docs.
+    const COMPLETE_STATES = ['COMPLETE'];
+    const FAILED_STATES = ['FAILED', 'CANCELLED', 'DENIED'];
+
+    const circleStatus: 'complete' | 'failed' | null = COMPLETE_STATES.includes(state)
+      ? 'complete'
+      : FAILED_STATES.includes(state)
+      ? 'failed'
+      : null;
+
+    if (!circleStatus || !walletId) {
+      logger.debug(
+        { notificationId: id, state, walletId },
+        'Intermediate transfer state, ignoring'
+      );
+      return;
+    }
+
+    logger.info({ circleTransferId: id, walletId, state }, 'Processing transfer state change');
+
+    try {
+      await this.confirmTransferHandler.execute({
+        circleWalletId: walletId,
+        circleStatus,
+        circleTransferId: id,
+        txHash,
+      });
+    } catch (error) {
+      logger.error({ error, circleTransferId: id, walletId }, 'Failed to confirm transfer from webhook');
     }
   }
 

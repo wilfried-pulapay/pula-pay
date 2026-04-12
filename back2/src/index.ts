@@ -17,7 +17,9 @@ import { redis } from './infrastructure/cache/redis-cache';
 
 // Adapters for worker dependencies
 import { CoinbaseCdpOnRampAdapter } from './infrastructure/adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
+import { CircleWalletAdapter } from './infrastructure/adapters/circle/CircleWalletAdapter';
 import { ConfirmDepositHandler } from './application/commands/ConfirmDepositHandler';
+import { ConfirmTransferHandler } from './application/commands/ConfirmTransferHandler';
 import { PrismaTransactionRepository } from './infrastructure/persistence/repositories/PrismaTransactionRepository';
 import { PrismaWalletRepository } from './infrastructure/persistence/repositories/PrismaWalletRepository';
 
@@ -102,13 +104,18 @@ async function bootstrap(): Promise<void> {
 
   // Bootstrap BullMQ workers
   const coinbaseCdpAdapter = new CoinbaseCdpOnRampAdapter();
+  const circleAdapter = new CircleWalletAdapter();
   const txRepo = new PrismaTransactionRepository(prisma);
   const walletRepo = new PrismaWalletRepository(prisma);
   const confirmDepositHandler = new ConfirmDepositHandler(prisma, txRepo, walletRepo);
+  const confirmTransferHandler = new ConfirmTransferHandler(prisma, txRepo, walletRepo);
 
   const workers = bootstrapWorkers({
     coinbaseCdpAdapter,
     confirmDepositHandler,
+    confirmTransferHandler,
+    walletProvider: circleAdapter,
+    walletRepo,
     transactionRepo: txRepo,
   });
 

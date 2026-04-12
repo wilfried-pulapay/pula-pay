@@ -53,6 +53,14 @@ export interface EstimateFeeParams {
   tokenId: string;
 }
 
+// ─── Transfer info (for polling) ─────────────────────────────────────────────
+
+export interface CircleTransferInfo {
+  id: string;
+  status: 'pending' | 'complete' | 'failed';
+  txHash?: string;
+}
+
 // ─── Wallet details ───────────────────────────────────────────────────────────
 
 export interface WalletDetails {
@@ -98,7 +106,8 @@ export interface WalletProvider {
 
   // Transfers (user-controlled: initiate → mobile resolves challenge)
   initiateTransfer(params: InitiateTransferParams): Promise<TransferChallengeResult>;
-  getTransferStatus(transferId: string): Promise<{ id: string; status: 'pending' | 'complete' | 'failed'; txHash?: string }>;
+  getTransferStatus(transferId: string): Promise<CircleTransferInfo>;
+  listWalletTransactions(circleWalletId: string, userToken: string): Promise<CircleTransferInfo[]>;
 
   // Fee estimation
   estimateFee(params: EstimateFeeParams): Promise<string>;

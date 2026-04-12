@@ -26,3 +26,13 @@ export const faucetQueue = new Queue('faucet', {
     backoff: { type: 'exponential', delay: 3000 },
   },
 });
+
+export const circleTransferPollingQueue = new Queue('circle-transfer-polling', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 40,
+    backoff: { type: 'fixed', delay: 15_000 },
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 604800 },
+  },
+});
