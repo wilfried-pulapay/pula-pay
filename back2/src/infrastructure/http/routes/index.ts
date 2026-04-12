@@ -21,6 +21,7 @@ import { ExecuteSimpleTransferHandler } from '../../../application/commands/Exec
 import { ConfirmDepositHandler } from '../../../application/commands/ConfirmDepositHandler';
 import { ConfirmTransferHandler } from '../../../application/commands/ConfirmTransferHandler';
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
+import { ProcessInboundDepositHandler } from '../../../application/commands/ProcessInboundDepositHandler';
 import { SyncWalletStatusHandler } from '../../../application/commands/SyncWalletStatusHandler';
 import { GetBalanceHandler } from '../../../application/queries/GetBalanceHandler';
 import { GetTransactionHistoryHandler } from '../../../application/queries/GetTransactionHistoryHandler';
@@ -105,7 +106,8 @@ export function createRouter(prisma: PrismaClient): Router {
     offrampQuoteHandler,
     circleWalletsHandler
   );
-  const webhookController = new WebhookController(confirmDepositHandler, confirmTransferHandler, activateWalletHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue);
+  const processInboundDepositHandler = new ProcessInboundDepositHandler(prisma, txRepo, walletRepo);
+  const webhookController = new WebhookController(confirmDepositHandler, confirmTransferHandler, activateWalletHandler, processInboundDepositHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue);
   const rateController = new ExchangeRateController(rateHandler, conversionService);
   const healthController = new HealthController(prisma);
 

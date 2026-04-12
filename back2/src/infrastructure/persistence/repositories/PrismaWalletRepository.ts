@@ -37,6 +37,13 @@ export class PrismaWalletRepository implements WalletRepository {
     return wallet ? this.toDomain(wallet) : null;
   }
 
+  async findAllActive(): Promise<Wallet[]> {
+    const wallets = await this.prisma.wallet.findMany({
+      where: { status: 'ACTIVE' },
+    });
+    return wallets.map((w) => this.toDomain(w));
+  }
+
   async create(params: CreateWalletRepoParams): Promise<Wallet> {
     const wallet = await this.prisma.wallet.create({
       data: {

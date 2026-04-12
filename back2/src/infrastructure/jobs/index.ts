@@ -2,6 +2,8 @@ import { createCoinbasePollingWorker } from './workers/coinbase-poll.worker';
 import { createTxExpiryWorker } from './workers/tx-expiry.worker';
 import { createFaucetWorker } from './workers/faucet.worker';
 import { createCircleTransferPollingWorker } from './workers/circle-transfer-poll.worker';
+import { createBalanceReconciliationWorker } from './workers/balance-reconciliation.worker';
+import { balanceReconciliationQueue } from './queues';
 import { CoinbaseCdpOnRampAdapter } from '../adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
@@ -19,7 +21,7 @@ export interface WorkerDependencies {
   transactionRepo: TransactionRepository;
 }
 
-export function bootstrapWorkers(deps: WorkerDependencies) {
+export async function bootstrapWorkers(deps: WorkerDependencies) {
   const coinbaseWorker = createCoinbasePollingWorker({
     coinbaseCdpAdapter: deps.coinbaseCdpAdapter,
     confirmDepositHandler: deps.confirmDepositHandler,
@@ -39,6 +41,21 @@ export function bootstrapWorkers(deps: WorkerDependencies) {
     confirmTransferHandler: deps.confirmTransferHandler,
   });
 
+  const reconciliationWorker = createBalanceReconciliationWorker({
+    walletProvider: deps.walletProvider,
+    walletRepo: deps.walletRepo,
+  });
+
+  // Schedule repeatable reconciliation job (every hour)
+  await balanceReconciliationQueue.add(
+    'reconcile-balances',
+    {},
+    {
+      repeat: { every: 3_600_000 },
+      jobId: 'balance-reconciliation-repeatable',
+    }
+  );
+
   const shutdown = async () => {
     logger.info('Shutting down workers...');
     await Promise.all([
@@ -46,10 +63,11 @@ export function bootstrapWorkers(deps: WorkerDependencies) {
       expiryWorker.close(),
       faucetWorker.close(),
       circleTransferWorker.close(),
+      reconciliationWorker.close(),
     ]);
     logger.info('All workers stopped');
   };
 
-  logger.info('BullMQ workers started: coinbase-polling, tx-expiry, faucet, circle-transfer-polling');
-  return { coinbaseWorker, expiryWorker, faucetWorker, circleTransferWorker, shutdown };
+  logger.info('BullMQ workers started: coinbase-polling, tx-expiry, faucet, circle-transfer-polling, balance-reconciliation');
+  return { coinbaseWorker, expiryWorker, faucetWorker, circleTransferWorker, reconciliationWorker, shutdown };
 }

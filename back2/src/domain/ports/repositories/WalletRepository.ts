@@ -19,6 +19,7 @@ export interface WalletRepository {
   findByAddress(address: string): Promise<Wallet | null>;
   findByCircleWalletId(circleWalletId: string): Promise<Wallet | null>;
   findByUserPhone(phone: string): Promise<Wallet | null>;
+  findAllActive(): Promise<Wallet[]>;
   create(params: CreateWalletRepoParams): Promise<Wallet>;
   update(wallet: Wallet): Promise<Wallet>;
   updateBalance(walletId: string, balance: Decimal): Promise<void>;

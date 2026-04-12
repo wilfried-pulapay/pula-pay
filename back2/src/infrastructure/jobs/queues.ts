@@ -36,3 +36,12 @@ export const circleTransferPollingQueue = new Queue('circle-transfer-polling', {
     removeOnFail: { age: 604800 },
   },
 });
+
+export const balanceReconciliationQueue = new Queue('balance-reconciliation', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 604800 },
+  },
+});

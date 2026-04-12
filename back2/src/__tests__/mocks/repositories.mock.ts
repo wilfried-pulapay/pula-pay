@@ -47,6 +47,7 @@ export const createMockWalletRepository = (): jest.Mocked<WalletRepository> => (
   findByAddress: jest.fn(),
   findByCircleWalletId: jest.fn(),
   findByUserPhone: jest.fn(),
+  findAllActive: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
   updateBalance: jest.fn(),
@@ -203,6 +204,10 @@ export class InMemoryWalletRepository implements WalletRepository {
     if (wallet) {
       wallet.syncBalance(balance);
     }
+  }
+
+  async findAllActive(): Promise<Wallet[]> {
+    return Array.from(this.wallets.values()).filter((w) => w.isActive());
   }
 
   // Test helpers

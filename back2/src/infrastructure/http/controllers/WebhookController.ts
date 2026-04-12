@@ -4,6 +4,7 @@ import { ApiResponse } from '../../../shared/types';
 import { ConfirmDepositHandler } from '../../../application/commands/ConfirmDepositHandler';
 import { ConfirmTransferHandler } from '../../../application/commands/ConfirmTransferHandler';
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
+import { ProcessInboundDepositHandler } from '../../../application/commands/ProcessInboundDepositHandler';
 import { OnRampProvider } from '../../../domain/ports/OnRampProvider';
 import { logger } from '../../../shared/utils/logger';
 
@@ -42,6 +43,7 @@ export class WebhookController {
     private readonly confirmDepositHandler: ConfirmDepositHandler,
     private readonly confirmTransferHandler: ConfirmTransferHandler,
     private readonly activateWalletHandler: ActivateWalletHandler,
+    private readonly processInboundDepositHandler: ProcessInboundDepositHandler,
     private readonly coinbaseCdpProvider: OnRampProvider,
     private readonly coinbasePollingQueue: Queue,
     private readonly txExpiryQueue: Queue,
@@ -141,6 +143,7 @@ export class WebhookController {
           break;
 
         case 'transactions.inbound':
+          await this.handleInboundTransactionChange(payload);
           break;
 
         case 'wallets':
@@ -222,6 +225,36 @@ export class WebhookController {
       });
     } catch (error) {
       logger.error({ error, circleTransferId: id, walletId }, 'Failed to confirm transfer from webhook');
+    }
+  }
+
+  private async handleInboundTransactionChange(payload: CircleWebhookPayload): Promise<void> {
+    const { id, walletId, state, txHash, amounts } = payload.notification;
+
+    // Only act when the transfer is fully settled on-chain.
+    // Note: Circle uses "COMPLETED" for inbound (vs "COMPLETE" for outbound).
+    if (state !== 'COMPLETED') {
+      logger.debug({ notificationId: id, state }, 'Inbound transaction not yet complete, ignoring');
+      return;
+    }
+
+    const amount = amounts?.[0];
+    if (!amount || !walletId) {
+      logger.warn({ notificationId: id, amounts, walletId }, 'Inbound transaction missing amount or walletId');
+      return;
+    }
+
+    logger.info({ circleTransactionId: id, walletId, amount }, 'Processing inbound deposit');
+
+    try {
+      await this.processInboundDepositHandler.execute({
+        circleWalletId: walletId,
+        circleTransactionId: id,
+        amount,
+        txHash,
+      });
+    } catch (error) {
+      logger.error({ error, circleTransactionId: id, walletId }, 'Failed to process inbound deposit from webhook');
     }
   }
 
