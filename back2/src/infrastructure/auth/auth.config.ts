@@ -80,25 +80,6 @@ export const auth = betterAuth({
 
   plugins: [expo(), bearer()],
 
-  databaseHooks: {
-    user: {
-      create: {
-        after: async (user) => {
-          // Circle user registration is a lightweight, idempotent call.
-          // Wallet setup (PIN) is initiated explicitly by the mobile after registration.
-          try {
-            const { CircleWalletAdapter } = await import('../adapters/circle/CircleWalletAdapter');
-            const circleAdapter = new CircleWalletAdapter();
-            await circleAdapter.registerUser(user.id);
-            logger.info({ userId: user.id }, 'Circle user registered after registration');
-          } catch (err) {
-            logger.error({ userId: user.id, err }, 'Failed to register Circle user after registration');
-          }
-        },
-      },
-    },
-  },
-
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day

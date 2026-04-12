@@ -55,7 +55,8 @@ export class CreateWalletHandler {
       };
     }
 
-    // 1. Ensure user is registered in Circle
+    // 1. Register user in Circle — this is the canonical registration point.
+    //    Circle returns 409 if already registered (idempotent), safely ignored.
     await this.walletProvider.registerUser(command.userId);
 
     // 2. Get a user token for this session
