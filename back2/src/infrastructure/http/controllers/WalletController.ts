@@ -7,7 +7,6 @@ import { ConfirmWalletSetupHandler, ConfirmWalletSetupResult } from '../../../ap
 import { InitiateDepositHandler, InitiateDepositResult } from '../../../application/commands/InitiateDepositHandler';
 import { InitiateWithdrawalHandler, InitiateWithdrawalResult } from '../../../application/commands/InitiateWithdrawalHandler';
 import { ExecuteTransferHandler, TransferResult } from '../../../application/commands/ExecuteTransferHandler';
-import { ExecuteSimpleTransferHandler, SimpleTransferResult } from '../../../application/commands/ExecuteSimpleTransferHandler';
 import { SyncWalletStatusHandler, SyncWalletStatusResult } from '../../../application/commands/SyncWalletStatusHandler';
 import { GetBalanceHandler, GetBalanceResult } from '../../../application/queries/GetBalanceHandler';
 import { GetTransactionHistoryHandler, GetTransactionHistoryResult } from '../../../application/queries/GetTransactionHistoryHandler';
@@ -92,7 +91,6 @@ export class WalletController {
     private readonly depositHandler: InitiateDepositHandler,
     private readonly withdrawHandler: InitiateWithdrawalHandler,
     private readonly transferHandler: ExecuteTransferHandler,
-    private readonly simpleTransferHandler: ExecuteSimpleTransferHandler,
     private readonly syncStatusHandler: SyncWalletStatusHandler,
     private readonly balanceHandler: GetBalanceHandler,
     private readonly historyHandler: GetTransactionHistoryHandler,
@@ -257,35 +255,6 @@ export class WalletController {
         senderUserId: req.user!.id,
         recipientPhone: data.recipientPhone,
         recipientWalletAddress: data.recipientAddress,
-        amount: data.amount,
-        currency: data.currency,
-        description: data.description,
-      });
-
-      res.status(202).json({
-        success: true,
-        data: result,
-        meta: {
-          requestId: req.headers['x-request-id'] as string,
-          timestamp: new Date().toISOString(),
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  simpleTransfer = async (
-    req: Request,
-    res: Response<ApiResponse<SimpleTransferResult>>,
-    next: NextFunction
-  ): Promise<void> => {
-    try {
-      const data = transferSchema.parse(req.body);
-      const result = await this.simpleTransferHandler.execute({
-        senderUserId: req.user!.id,
-        recipientPhone: data.recipientPhone,
-        recipientAddress: data.recipientAddress,
         amount: data.amount,
         currency: data.currency,
         description: data.description,

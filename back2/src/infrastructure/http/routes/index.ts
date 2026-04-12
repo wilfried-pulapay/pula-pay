@@ -17,7 +17,6 @@ import { ConfirmWalletSetupHandler } from '../../../application/commands/Confirm
 import { InitiateDepositHandler } from '../../../application/commands/InitiateDepositHandler';
 import { InitiateWithdrawalHandler } from '../../../application/commands/InitiateWithdrawalHandler';
 import { ExecuteTransferHandler } from '../../../application/commands/ExecuteTransferHandler';
-import { ExecuteSimpleTransferHandler } from '../../../application/commands/ExecuteSimpleTransferHandler';
 import { ConfirmDepositHandler } from '../../../application/commands/ConfirmDepositHandler';
 import { ConfirmTransferHandler } from '../../../application/commands/ConfirmTransferHandler';
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
@@ -72,7 +71,6 @@ export function createRouter(prisma: PrismaClient): Router {
   const depositHandler = new InitiateDepositHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter, coinbasePollingQueue, txExpiryQueue);
   const withdrawHandler = new InitiateWithdrawalHandler(walletRepo, txRepo, coinbaseCdpAdapter, exchangeRateAdapter, coinbasePollingQueue, txExpiryQueue);
   const transferHandler = new ExecuteTransferHandler(walletRepo, txRepo, circleAdapter, exchangeRateAdapter, circleTransferPollingQueue, txExpiryQueue);
-  const simpleTransferHandler = new ExecuteSimpleTransferHandler(prisma, walletRepo, txRepo, exchangeRateAdapter);
   const confirmDepositHandler = new ConfirmDepositHandler(prisma, txRepo, walletRepo);
   const confirmTransferHandler = new ConfirmTransferHandler(prisma, txRepo, walletRepo);
   const activateWalletHandler = new ActivateWalletHandler(walletRepo);
@@ -95,7 +93,6 @@ export function createRouter(prisma: PrismaClient): Router {
     depositHandler,
     withdrawHandler,
     transferHandler,
-    simpleTransferHandler,
     syncWalletStatusHandler,
     balanceHandler,
     historyHandler,

@@ -19,14 +19,6 @@ export const txExpiryQueue = new Queue('tx-expiry', {
   },
 });
 
-export const faucetQueue = new Queue('faucet', {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 5,
-    backoff: { type: 'exponential', delay: 3000 },
-  },
-});
-
 export const circleTransferPollingQueue = new Queue('circle-transfer-polling', {
   connection: redisConnection,
   defaultJobOptions: {
