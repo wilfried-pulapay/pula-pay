@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { API_URL } from "../constants/config";
-import { authClient, getToken } from "../lib/auth";
+import { authClient, getSessionCookieHeader } from "../lib/auth";
 import { logger } from "../utils/logger";
 
 let onUnauthorized: (() => void) | null = null;
@@ -15,9 +15,9 @@ const client = axios.create({
     baseURL: API_URL,
 });
 
-client.interceptors.request.use((config: TimedAxiosRequestConfig) => {
-    const token = getToken();
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+client.interceptors.request.use(async (config: TimedAxiosRequestConfig) => {
+    const cookie = await getSessionCookieHeader();
+    if (cookie) config.headers['Cookie'] = cookie;
 
     // Track request start time
     config.metadata = { startTime: Date.now() };

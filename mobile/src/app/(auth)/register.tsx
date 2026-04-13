@@ -58,7 +58,7 @@ export default function Register() {
             setError(null);
             await authClient.signIn.social({
                 provider: "google",
-                callbackURL: "pulapay://auth/callback",
+                callbackURL: "pulapay://",
             });
         } catch {
             setError(t("apiErrors.NETWORK_ERROR"));

@@ -1,7 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
 import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
 import { BASE_URL } from "../constants/config";
 import type { User } from "../store/types";
 
@@ -60,21 +59,25 @@ export async function logout(): Promise<void> {
     useWalletStore.getState().reset();
 }
 
-// Storage key used by expoClient (storagePrefix + "_cookie") and syncSessionFromToken.
-// Format: { "better-auth.session_token": { value: string, expires: null } }
+// Storage key used by expoClient (storagePrefix + "_cookie").
+// Format: { [cookieName]: { value: string, expires: string | null } }
 const COOKIE_STORE_KEY = "pulapay_cookie";
-const SESSION_TOKEN_KEY = "better-auth.session_token";
 
 /**
- * Read the current session token from storage synchronously.
- * Used by the axios client to attach Authorization: Bearer headers.
+ * Build a Cookie header string from SecureStore, replicating what expoClient does
+ * internally for its own fetch calls. better-auth session validation reads cookies,
+ * not Authorization: Bearer headers (the bearer plugin is for API keys only).
  */
-export function getToken(): string | null {
+export async function getSessionCookieHeader(): Promise<string | null> {
     try {
-        const raw = Platform.OS === "web"
-            ? (typeof window !== "undefined" ? window.localStorage.getItem(COOKIE_STORE_KEY) : null)
-            : SecureStore.getItem(COOKIE_STORE_KEY);
-        return JSON.parse(raw ?? "{}")?.[SESSION_TOKEN_KEY]?.value ?? null;
+        const raw = await SecureStore.getItemAsync(COOKIE_STORE_KEY);
+        const jar: Record<string, { value: string; expires: string | null }> = JSON.parse(raw ?? "{}");
+        const now = new Date();
+        const cookie = Object.entries(jar)
+            .filter(([, v]) => v.value && (!v.expires || new Date(v.expires) > now))
+            .map(([name, v]) => `${name}=${v.value}`)
+            .join("; ");
+        return cookie || null;
     } catch {
         return null;
     }
