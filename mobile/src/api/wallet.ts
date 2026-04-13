@@ -182,7 +182,7 @@ export async function createTransfer(
         currency: req.currency,
         description: req.description,
     };
-    const { data } = await client.post("/wallet/transferable", backendPayload, cfgIdempotency(opts?.idempotencyKey));
+    const { data } = await client.post("/wallet/transfer", backendPayload, cfgIdempotency(opts?.idempotencyKey));
     return data.data;
 }
 
@@ -220,6 +220,38 @@ export async function resolveRecipientId(phone: string): Promise<string> {
         params: { phone }
     });
     return data.data.userId;
+}
+
+// === CIRCLE WALLETS (recovery) ===
+
+export type CircleWalletDetails = {
+    id: string;
+    address: string;
+    blockchain: string;
+    state: 'LIVE' | 'PENDING' | 'FROZEN';
+    userId?: string;
+    refId?: string;
+};
+
+export async function getCircleWallets(): Promise<CircleWalletDetails> {
+    const { data } = await client.get("/wallet/circle-wallets");
+    return data.data;
+}
+
+// === RECONCILIATION ===
+
+export type ReconcileBalanceResponse = {
+    walletId: string;
+    dbBalance: string;
+    circleBalance: string;
+    diff: string;
+    corrected: boolean;
+    alertOnly: boolean;
+};
+
+export async function reconcileBalance(): Promise<ReconcileBalanceResponse> {
+    const { data } = await client.post("/wallet/reconcile-balance");
+    return data.data;
 }
 
 // === USER PREFERENCES ===

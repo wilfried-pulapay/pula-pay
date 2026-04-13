@@ -57,6 +57,7 @@ export type WalletState = {
     convertToDisplay: (amountUsdc: string) => string;
     convertToUsdc: (displayAmount: string) => string;
     syncWalletStatus: () => Promise<{ wasUpdated: boolean; currentStatus: string }>;
+    reconcileBalance: () => Promise<void>;
 
     // Actions - Track
     trackTransaction: (txId: string) => Promise<void>;

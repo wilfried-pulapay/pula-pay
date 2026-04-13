@@ -9,8 +9,10 @@ import {
     getExchangeRates,
     getTxStatus,
     syncWalletStatus,
+    reconcileBalance as reconcileBalanceApi,
     initiateWalletSetup,
     confirmWalletSetup,
+    getCircleWallets,
 } from "@/src/api/wallet";
 import { setOnUnauthorized } from "@/src/api/client";
 import { getApiError } from "@/src/utils/api-error";
@@ -36,14 +38,35 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     loading: false,
     error: null,
 
-    // Fetch wallet info
+    // Fetch wallet info, with Circle recovery if the wallet is missing locally
     fetchWallet: async () => {
-        set({ loading: true, error: null });
+        set({ loading: true, error: null, walletNotFound: false });
         try {
             const wallet = await getMyWallet();
-            set({ wallet });
-        } catch {
-            set({ error: "Impossible de récupérer le portefeuille" });
+            set({ wallet, walletNotFound: false });
+        } catch (e) {
+            const { code } = getApiError(e);
+            if (code === "WALLET_NOT_FOUND") {
+                // Wallet missing locally — check Circle directly before showing the create prompt.
+                // If the wallet exists in Circle (PIN was set but confirm-setup never completed),
+                // confirm-setup will recover and persist it using the app-scoped fallback.
+                try {
+                    const circleWallet = await getCircleWallets();
+                    if (circleWallet?.state === 'LIVE') {
+                        const challengeData = await initiateWalletSetup("BASE_SEPOLIA");
+                        await confirmWalletSetup(challengeData.userToken, "BASE_SEPOLIA");
+                        const wallet = await getMyWallet();
+                        set({ wallet, walletNotFound: false });
+                        await get().fetchBalance();
+                    } else {
+                        set({ walletNotFound: true, error: null });
+                    }
+                } catch {
+                    set({ walletNotFound: true, error: null });
+                }
+            } else {
+                set({ error: "Impossible de récupérer le portefeuille" });
+            }
         } finally {
             set({ loading: false });
         }
@@ -51,7 +74,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
     // Fetch balance with USDC conversion
     fetchBalance: async () => {
-        set({ loading: true, error: null, walletNotFound: false });
+        set({ loading: true, error: null });
         try {
             const data = await getMyBalance(get().displayCurrency);
             set({
@@ -59,13 +82,8 @@ export const useWalletStore = create<WalletState>((set, get) => ({
                 displayBalance: data.displayBalance,
                 walletNotFound: false,
             });
-        } catch (e) {
-            const { code } = getApiError(e);
-            if (code === "WALLET_NOT_FOUND") {
-                set({ walletNotFound: true, error: null });
-            } else {
-                set({ error: "Impossible de récupérer le solde" });
-            }
+        } catch {
+            set({ error: "Impossible de récupérer le solde" });
         } finally {
             set({ loading: false });
         }
@@ -150,6 +168,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         try {
             const result = await confirmWalletSetup(userToken, blockchain);
             // Refresh wallet state after confirmation
+            await get().fetchWallet();
             await get().fetchBalance();
             return result;
         } finally {
@@ -188,6 +207,15 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         const rate = parseFloat(exchangeRates[displayCurrency].rate);
         const value = parseFloat(displayAmount) / rate;
         return value.toFixed(6);
+    },
+
+    // Reconcile balance with Circle (fire-and-forget, used for testing)
+    reconcileBalance: async () => {
+        try {
+            await reconcileBalanceApi();
+        } catch {
+            // silently ignore — don't block refresh on failure
+        }
     },
 
     // Sync wallet status with Circle

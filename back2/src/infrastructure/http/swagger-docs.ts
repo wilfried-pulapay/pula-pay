@@ -528,6 +528,66 @@
 
 /**
  * @swagger
+ * /wallet/reconcile-balance:
+ *   post:
+ *     summary: Reconcile wallet balance with Circle
+ *     description: |
+ *       Fetches the live USDC balance from Circle and compares it against the DB value.
+ *
+ *       **Auto-correction rules:**
+ *       - `Circle > DB` (missed credit): balance is corrected automatically → `corrected: true`
+ *       - `Circle < DB` (potential overcredit bug): alert logged, no change → `alertOnly: true`
+ *       - No drift (< 0.000001 USDC): no-op → `corrected: false, alertOnly: false`
+ *
+ *       The hourly background job runs the same logic for all wallets automatically.
+ *       Use this endpoint to trigger an on-demand reconciliation for the authenticated user.
+ *     tags: [Wallet]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reconciliation result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         walletId:
+ *                           type: string
+ *                           description: Local wallet ID
+ *                         dbBalance:
+ *                           type: string
+ *                           description: Balance in DB before reconciliation (USDC)
+ *                           example: "9.500000"
+ *                         circleBalance:
+ *                           type: string
+ *                           description: Live balance from Circle (USDC)
+ *                           example: "10.000000"
+ *                         diff:
+ *                           type: string
+ *                           description: circleBalance − dbBalance (negative = DB > Circle)
+ *                           example: "0.500000"
+ *                         corrected:
+ *                           type: boolean
+ *                           description: true if DB was updated to match Circle
+ *                         alertOnly:
+ *                           type: boolean
+ *                           description: true if DB > Circle — no auto-correct, manual investigation required
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Wallet not found
+ *       500:
+ *         description: Failed to reach Circle API
+ */
+
+/**
+ * @swagger
  * /wallet/deposit:
  *   post:
  *     summary: Initiate a deposit (onramp)

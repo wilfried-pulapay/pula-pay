@@ -22,6 +22,7 @@ import { ConfirmTransferHandler } from '../../../application/commands/ConfirmTra
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
 import { ProcessInboundDepositHandler } from '../../../application/commands/ProcessInboundDepositHandler';
 import { SyncWalletStatusHandler } from '../../../application/commands/SyncWalletStatusHandler';
+import { ReconcileBalanceHandler } from '../../../application/commands/ReconcileBalanceHandler';
 import { GetBalanceHandler } from '../../../application/queries/GetBalanceHandler';
 import { GetTransactionHistoryHandler } from '../../../application/queries/GetTransactionHistoryHandler';
 import { GetTransactionByIdHandler } from '../../../application/queries/GetTransactionByIdHandler';
@@ -75,6 +76,7 @@ export function createRouter(prisma: PrismaClient): Router {
   const confirmTransferHandler = new ConfirmTransferHandler(prisma, txRepo, walletRepo);
   const activateWalletHandler = new ActivateWalletHandler(walletRepo);
   const syncWalletStatusHandler = new SyncWalletStatusHandler(walletRepo, circleAdapter);
+  const reconcileBalanceHandler = new ReconcileBalanceHandler(walletRepo, circleAdapter);
   const balanceHandler = new GetBalanceHandler(userRepo, walletRepo, exchangeRateAdapter);
   const historyHandler = new GetTransactionHistoryHandler(walletRepo, txRepo);
   const transactionByIdHandler = new GetTransactionByIdHandler(walletRepo, txRepo);
@@ -101,7 +103,8 @@ export function createRouter(prisma: PrismaClient): Router {
     resolveRecipientHandler,
     onrampQuoteHandler,
     offrampQuoteHandler,
-    circleWalletsHandler
+    circleWalletsHandler,
+    reconcileBalanceHandler
   );
   const processInboundDepositHandler = new ProcessInboundDepositHandler(prisma, txRepo, walletRepo);
   const webhookController = new WebhookController(confirmDepositHandler, confirmTransferHandler, activateWalletHandler, processInboundDepositHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue);
@@ -127,10 +130,10 @@ export function createRouter(prisma: PrismaClient): Router {
   router.get('/wallet/address', authMiddleware, walletController.getAddress);
   router.get('/wallet/balance', authMiddleware, walletController.getBalance);
   router.post('/wallet/sync-status', authMiddleware, walletController.syncWalletStatus);
+  router.post('/wallet/reconcile-balance', authMiddleware, walletController.reconcileBalance);
   router.post('/wallet/deposit', authMiddleware, walletController.initiateDeposit);
   router.post('/wallet/withdraw', authMiddleware, walletController.initiateWithdrawal);
   router.post('/wallet/transfer', authMiddleware, walletController.transfer);
-  router.post('/wallet/transferable', authMiddleware, walletController.simpleTransfer);
   router.get('/wallet/transactions/:txId', authMiddleware, walletController.getTransaction);
   router.get('/wallet/transactions', authMiddleware, walletController.getTransactionHistory);
   router.get('/wallet/resolve-recipient', authMiddleware, walletController.resolveRecipient);

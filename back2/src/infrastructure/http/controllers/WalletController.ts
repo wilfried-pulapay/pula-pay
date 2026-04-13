@@ -8,6 +8,7 @@ import { InitiateDepositHandler, InitiateDepositResult } from '../../../applicat
 import { InitiateWithdrawalHandler, InitiateWithdrawalResult } from '../../../application/commands/InitiateWithdrawalHandler';
 import { ExecuteTransferHandler, TransferResult } from '../../../application/commands/ExecuteTransferHandler';
 import { SyncWalletStatusHandler, SyncWalletStatusResult } from '../../../application/commands/SyncWalletStatusHandler';
+import { ReconcileBalanceHandler, ReconcileBalanceResult } from '../../../application/commands/ReconcileBalanceHandler';
 import { GetBalanceHandler, GetBalanceResult } from '../../../application/queries/GetBalanceHandler';
 import { GetTransactionHistoryHandler, GetTransactionHistoryResult } from '../../../application/queries/GetTransactionHistoryHandler';
 import { GetTransactionByIdHandler, GetTransactionByIdResult } from '../../../application/queries/GetTransactionByIdHandler';
@@ -99,7 +100,8 @@ export class WalletController {
     private readonly resolveRecipientHandler: ResolveRecipientHandler,
     private readonly onrampQuoteHandler: GetOnrampQuoteHandler,
     private readonly offrampQuoteHandler: GetOfframpQuoteHandler,
-    private readonly circleWalletsHandler: GetCircleWalletsHandler
+    private readonly circleWalletsHandler: GetCircleWalletsHandler,
+  private readonly reconcileBalanceHandler: ReconcileBalanceHandler
   ) {}
 
   /**
@@ -374,9 +376,32 @@ export class WalletController {
     }
   };
 
+  reconcileBalance = async (
+    req: Request,
+    res: Response<ApiResponse<ReconcileBalanceResult>>,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const result = await this.reconcileBalanceHandler.execute({
+        userId: req.user!.id,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+        meta: {
+          requestId: req.headers['x-request-id'] as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   resolveRecipient = async (
     req: Request,
-    res: Response<ResolveRecipientResult>,
+    res: Response<ApiResponse<ResolveRecipientResult>>,
     next: NextFunction
   ): Promise<void> => {
     try {
@@ -386,7 +411,14 @@ export class WalletController {
         address: query.address,
       });
 
-      res.json(result);
+      res.json({
+        success: true,
+        data: result,
+        meta: {
+          requestId: req.headers['x-request-id'] as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
     } catch (error) {
       next(error);
     }

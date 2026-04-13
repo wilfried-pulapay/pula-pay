@@ -14,7 +14,7 @@ export default function WalletSummary() {
     const { t } = useTranslation();
     const router = useRouter();
     const styles = useStyles(getStyles);
-    const { balanceUsdc, displayBalance, loading, fetchBalance, walletNotFound, initiateWalletSetup, confirmWalletSetup } = useWalletStore();
+    const { balanceUsdc, displayBalance, loading, fetchWallet, fetchBalance, reconcileBalance, walletNotFound, initiateWalletSetup, confirmWalletSetup } = useWalletStore();
     const [showBalance, setShowBalance] = useState(true);
     const [creatingWallet, setCreatingWallet] = useState(false);
 
@@ -30,9 +30,17 @@ export default function WalletSummary() {
         return `${parseFloat(balanceUsdc).toFixed(2)} USDC`;
     }, [showBalance, balanceUsdc]);
 
+    const refresh = async () => {
+        const calls: Promise<void>[] = [fetchWallet(), fetchBalance()];
+        if (process.env.EXPO_PUBLIC_ENABLE_RECONCILE === 'true') {
+            calls.push(reconcileBalance());
+        }
+        await Promise.all(calls);
+    };
+
     useEffect(() => {
-        fetchBalance();
-    }, [fetchBalance]);
+        refresh();
+    }, []);
 
     // Handle wallet creation when wallet not found
     const handleCreateWallet = async () => {
@@ -43,6 +51,7 @@ export default function WalletSummary() {
                 await executeCircleChallenge(challengeData);
                 await confirmWalletSetup(challengeData.userToken, "BASE_SEPOLIA");
             } else {
+                await fetchWallet();
                 await fetchBalance();
             }
         } catch {
@@ -113,7 +122,7 @@ export default function WalletSummary() {
                         <TouchableOpacity onPress={() => setShowBalance((s) => !s)} style={styles.iconButton}>
                             {showBalance ? <Eye color="rgba(255,255,255,0.6)" size={18} /> : <EyeOff color="rgba(255,255,255,0.6)" size={18} />}
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={fetchBalance} style={styles.iconButton}>
+                        <TouchableOpacity onPress={refresh} style={styles.iconButton}>
                             <RotateCw color="rgba(255,255,255,0.6)" size={18} />
                         </TouchableOpacity>
                     </View>
