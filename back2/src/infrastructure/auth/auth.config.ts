@@ -12,7 +12,7 @@ export const auth = betterAuth({
   basePath: '/api/auth',
   secret: config.betterAuth.secret,
   baseURL: config.betterAuth.url,
-  trustedOrigins: ['pulapay://', 'exp://**', 'http://192.168.1.76:3000'],
+  trustedOrigins: ['pulapay://', 'exp://**', ...config.betterAuth.trustedOrigins],
 
   onAPIError: {
     onError: (error, _ctx) => {

@@ -20,6 +20,7 @@ const envSchema = z.object({
   // Better Auth
   BETTER_AUTH_SECRET: z.string().default('change-me-in-production-32chars!!'),
   BETTER_AUTH_URL: z.string().default('http://localhost:3000'),
+  BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
 
   // Social providers (optional)
   GOOGLE_CLIENT_ID: z.string().optional(),
@@ -85,6 +86,9 @@ export const config = {
   betterAuth: {
     secret: env.BETTER_AUTH_SECRET,
     url: env.BETTER_AUTH_URL,
+    trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS
+      ? env.BETTER_AUTH_TRUSTED_ORIGINS.split(',').map((o) => o.trim())
+      : [],
   },
 
   socialProviders: {
