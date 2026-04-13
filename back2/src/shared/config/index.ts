@@ -34,8 +34,8 @@ const envSchema = z.object({
 
   // Blockchain
   DEFAULT_BLOCKCHAIN: z.string().default('BASE_SEPOLIA'),
-  USDC_TOKEN_ID_BASE_SEPOLIA: z.string().default(''),
-  USDC_TOKEN_ID_BASE: z.string().default(''),
+  USDC_TOKEN_ID_BASE_SEPOLIA: z.string().min(1),
+  USDC_TOKEN_ID_BASE: z.string().min(1),
 
   // Exchange Rate
   EXCHANGE_RATE_PROVIDER: z.string().default('coingecko'),

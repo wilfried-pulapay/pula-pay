@@ -164,10 +164,12 @@ export class ExecuteTransferHandler {
   }
 
   private getUsdcTokenId(blockchain: Blockchain): string {
-    return (
+    const tokenId =
       config.usdc.tokenIds[blockchain] ??
-      config.usdc.tokenIds['BASE_SEPOLIA'] ??
-      ''
-    );
+      config.usdc.tokenIds['BASE_SEPOLIA'];
+    if (!tokenId) {
+      throw new Error(`No USDC token ID configured for blockchain: ${blockchain}`);
+    }
+    return tokenId;
   }
 }
