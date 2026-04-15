@@ -26,6 +26,10 @@ import { PrismaWalletRepository } from './infrastructure/persistence/repositorie
 async function bootstrap(): Promise<void> {
   const app = express();
 
+  // Trust the first proxy (nginx, load balancer) so express-rate-limit
+  // can correctly identify client IPs from X-Forwarded-For
+  app.set('trust proxy', 1);
+
   // Security middleware
   app.use(helmet());
   app.use(
