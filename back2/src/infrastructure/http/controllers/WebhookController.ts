@@ -6,6 +6,7 @@ import { ConfirmTransferHandler } from '../../../application/commands/ConfirmTra
 import { ActivateWalletHandler } from '../../../application/commands/ActivateWalletHandler';
 import { ProcessInboundDepositHandler } from '../../../application/commands/ProcessInboundDepositHandler';
 import { OnRampProvider } from '../../../domain/ports/OnRampProvider';
+import { WalletProvider } from '../../../domain/ports/WalletProvider';
 import { logger } from '../../../shared/utils/logger';
 
 interface CoinbaseCdpWebhookPayload {
@@ -47,6 +48,7 @@ export class WebhookController {
     private readonly coinbaseCdpProvider: OnRampProvider,
     private readonly coinbasePollingQueue: Queue,
     private readonly txExpiryQueue: Queue,
+    private readonly walletProvider: WalletProvider,
   ) {}
 
   handleCoinbaseCdpWebhook = async (
@@ -126,6 +128,31 @@ export class WebhookController {
     _next: NextFunction
   ): Promise<void> => {
     try {
+      // Verify Circle webhook signature (RSA-SHA256, header: X-Circle-Signature)
+      const signature = req.headers['x-circle-signature'] as string | undefined;
+      const rawBody = (req as any).rawBody as string | undefined;
+
+      if (!signature || !rawBody) {
+        logger.warn({ hasSignature: !!signature, hasRawBody: !!rawBody }, 'Circle webhook missing signature or raw body');
+        res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_WEBHOOK', message: 'Missing webhook signature' },
+          meta: { requestId: req.headers['x-request-id'] as string, timestamp: new Date().toISOString() },
+        });
+        return;
+      }
+
+      const isValid = await this.walletProvider.verifyWebhookSignature(rawBody, signature);
+      if (!isValid) {
+        logger.warn({ signature }, 'Invalid Circle webhook signature');
+        res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_WEBHOOK', message: 'Invalid webhook signature' },
+          meta: { requestId: req.headers['x-request-id'] as string, timestamp: new Date().toISOString() },
+        });
+        return;
+      }
+
       const payload = req.body as CircleWebhookPayload;
 
       logger.info(

@@ -18,6 +18,7 @@ import { GetOnrampQuoteHandler } from '../../../application/queries/GetOnrampQuo
 import { GetOfframpQuoteHandler } from '../../../application/queries/GetOfframpQuoteHandler';
 import { OnrampQuoteResult, OfframpQuoteResult } from '../../../domain/ports/QuoteProvider';
 import { GetCircleWalletsHandler } from '../../../application/queries/GetCircleWalletsHandler';
+import { EstimateTransferFeeHandler, EstimateTransferFeeResult } from '../../../application/queries/EstimateTransferFeeHandler';
 
 // Validation schemas
 const blockchainSchema = z.object({
@@ -85,6 +86,12 @@ const offrampQuoteSchema = z.object({
   paymentMethod: z.enum(['ACH_BANK_ACCOUNT', 'CARD']).default('ACH_BANK_ACCOUNT'),
 });
 
+const estimateFeeSchema = z.object({
+  recipientAddress: z.string().min(1),
+  amount: z.number().positive(),
+  currency: z.nativeEnum(Currency),
+});
+
 export class WalletController {
   constructor(
     private readonly createWalletHandler: CreateWalletHandler,
@@ -101,7 +108,8 @@ export class WalletController {
     private readonly onrampQuoteHandler: GetOnrampQuoteHandler,
     private readonly offrampQuoteHandler: GetOfframpQuoteHandler,
     private readonly circleWalletsHandler: GetCircleWalletsHandler,
-  private readonly reconcileBalanceHandler: ReconcileBalanceHandler
+  private readonly reconcileBalanceHandler: ReconcileBalanceHandler,
+  private readonly estimateFeeHandler: EstimateTransferFeeHandler,
   ) {}
 
   /**
@@ -486,6 +494,37 @@ export class WalletController {
         cashoutCurrency: query.cashoutCurrency,
         country: query.country,
         paymentMethod: query.paymentMethod,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+        meta: {
+          requestId: req.headers['x-request-id'] as string,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /wallet/estimate-fee
+   * Estimates the network fee for a P2P transfer before initiating it.
+   */
+  estimateFee = async (
+    req: Request,
+    res: Response<ApiResponse<EstimateTransferFeeResult>>,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const data = estimateFeeSchema.parse(req.body);
+      const result = await this.estimateFeeHandler.execute({
+        userId: req.user!.id,
+        recipientAddress: data.recipientAddress,
+        amount: data.amount,
+        currency: data.currency,
       });
 
       res.json({

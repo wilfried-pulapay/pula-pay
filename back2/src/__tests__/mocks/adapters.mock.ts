@@ -34,6 +34,7 @@ export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
   getTransferStatus: jest.fn(),
   listWalletTransactions: jest.fn(),
   estimateFee: jest.fn(),
+  verifyWebhookSignature: jest.fn(),
 });
 
 /**
@@ -149,6 +150,10 @@ export class InMemoryWalletProvider implements WalletProvider {
 
   async estimateFee(_params: EstimateFeeParams): Promise<string> {
     return '0.001';
+  }
+
+  async verifyWebhookSignature(_rawBody: string, _signature: string): Promise<boolean> {
+    return true;
   }
 
   // Test helpers

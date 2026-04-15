@@ -32,6 +32,7 @@ import { ResolveRecipientHandler } from '../../../application/queries/ResolveRec
 import { GetOnrampQuoteHandler } from '../../../application/queries/GetOnrampQuoteHandler';
 import { GetOfframpQuoteHandler } from '../../../application/queries/GetOfframpQuoteHandler';
 import { GetCircleWalletsHandler } from '../../../application/queries/GetCircleWalletsHandler';
+import { EstimateTransferFeeHandler } from '../../../application/queries/EstimateTransferFeeHandler';
 import { CurrencyConversionService } from '../../../application/services/CurrencyConversionService';
 
 // Repositories
@@ -86,6 +87,7 @@ export function createRouter(prisma: PrismaClient): Router {
   const onrampQuoteHandler = new GetOnrampQuoteHandler(coinbaseCdpAdapter);
   const offrampQuoteHandler = new GetOfframpQuoteHandler(coinbaseCdpAdapter);
   const circleWalletsHandler = new GetCircleWalletsHandler(circleAdapter);
+  const estimateTransferFeeHandler = new EstimateTransferFeeHandler(walletRepo, circleAdapter, exchangeRateAdapter);
   const conversionService = new CurrencyConversionService(exchangeRateAdapter);
 
   // Controllers
@@ -104,10 +106,11 @@ export function createRouter(prisma: PrismaClient): Router {
     onrampQuoteHandler,
     offrampQuoteHandler,
     circleWalletsHandler,
-    reconcileBalanceHandler
+    reconcileBalanceHandler,
+    estimateTransferFeeHandler,
   );
   const processInboundDepositHandler = new ProcessInboundDepositHandler(prisma, txRepo, walletRepo);
-  const webhookController = new WebhookController(confirmDepositHandler, confirmTransferHandler, activateWalletHandler, processInboundDepositHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue);
+  const webhookController = new WebhookController(confirmDepositHandler, confirmTransferHandler, activateWalletHandler, processInboundDepositHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue, circleAdapter);
   const rateController = new ExchangeRateController(rateHandler, conversionService);
   const healthController = new HealthController(prisma);
 
@@ -140,6 +143,7 @@ export function createRouter(prisma: PrismaClient): Router {
   router.get('/wallet/onramp-quote', authMiddleware, walletController.getOnrampQuote);
   router.get('/wallet/offramp-quote', authMiddleware, walletController.getOfframpQuote);
   router.get('/wallet/circle-wallets', authMiddleware, walletController.getCircleWallets);
+  router.post('/wallet/estimate-fee', authMiddleware, walletController.estimateFee);
 
   return router;
 }

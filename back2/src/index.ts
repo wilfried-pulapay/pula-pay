@@ -69,7 +69,13 @@ async function bootstrap(): Promise<void> {
   mountAuthRoutes(app);
 
   // Body parsing (for /api/v2 routes only, after auth is mounted)
-  app.use(express.json({ limit: '10kb' }));
+  // The verify callback saves the raw buffer for Circle webhook signature verification
+  app.use(express.json({
+    limit: '10kb',
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
   // Compression

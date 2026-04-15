@@ -111,4 +111,7 @@ export interface WalletProvider {
 
   // Fee estimation
   estimateFee(params: EstimateFeeParams): Promise<string>;
+
+  // Webhook signature verification
+  verifyWebhookSignature(rawBody: string, signature: string): Promise<boolean>;
 }

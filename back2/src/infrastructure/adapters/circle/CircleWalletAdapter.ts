@@ -1,3 +1,4 @@
+import { createVerify } from 'node:crypto';
 import {
   WalletProvider,
   WalletBalance,
@@ -44,6 +45,7 @@ const BLOCKCHAIN_MAP: Record<string, string> = {
 export class CircleWalletAdapter implements WalletProvider {
   private readonly baseUrl = 'https://api.circle.com/v1/w3s';
   private readonly apiKey: string;
+  private cachedPublicKey: string | null = null;
 
   constructor() {
     this.apiKey = config.circle.apiKey;
@@ -264,6 +266,36 @@ export class CircleWalletAdapter implements WalletProvider {
       status: this.mapCircleStatus(tx.state),
       txHash: tx.txHash,
     }));
+  }
+
+  // ─── Webhook verification ────────────────────────────────────────────────────
+
+  /**
+   * Fetches and caches Circle's entity public key used to verify webhook signatures.
+   * The key is stable per environment — a single cache per process lifetime is safe.
+   */
+  private async fetchEntityPublicKey(): Promise<string> {
+    if (this.cachedPublicKey) return this.cachedPublicKey;
+    const result = await this.request<{ publicKey: string }>('GET', '/config/entity');
+    this.cachedPublicKey = result.publicKey;
+    return this.cachedPublicKey;
+  }
+
+  /**
+   * Verifies a Circle webhook signature.
+   * Circle signs the raw request body with RSA-SHA256 using their entity private key.
+   * The signature is provided in the X-Circle-Signature header (base64 encoded).
+   */
+  async verifyWebhookSignature(rawBody: string, signature: string): Promise<boolean> {
+    try {
+      const publicKey = await this.fetchEntityPublicKey();
+      const verifier = createVerify('SHA256');
+      verifier.update(rawBody);
+      return verifier.verify(publicKey, signature, 'base64');
+    } catch (err) {
+      logger.warn({ err }, 'Circle webhook signature verification failed');
+      return false;
+    }
   }
 
   async estimateFee(params: EstimateFeeParams): Promise<string> {
