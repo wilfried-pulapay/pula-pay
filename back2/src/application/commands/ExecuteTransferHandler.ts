@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { Queue } from 'bullmq';
 import { Currency, Blockchain } from '@prisma/client';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
+import { UserRepository } from '../../domain/ports/repositories/UserRepository';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
 import { ExchangeRateProvider } from '../../domain/ports/ExchangeRateProvider';
@@ -42,6 +43,7 @@ export interface TransferResult {
 export class ExecuteTransferHandler {
   constructor(
     private readonly walletRepo: WalletRepository,
+    private readonly userRepo: UserRepository,
     private readonly txRepo: TransactionRepository,
     private readonly walletProvider: WalletProvider,
     private readonly exchangeRateProvider: ExchangeRateProvider,
@@ -88,18 +90,24 @@ export class ExecuteTransferHandler {
       );
     }
 
-    // 3. Convert amount to USDC
+    // 3. Fetch user names for metadata
+    const [senderUser, recipientUser] = await Promise.all([
+      this.userRepo.findById(senderWallet.userId),
+      this.userRepo.findById(recipientWallet.userId),
+    ]);
+
+    // 4. Convert amount to USDC
     const rate = await this.exchangeRateProvider.getRate(command.currency);
     const money = Money.fromFiat(command.amount, command.currency, rate.rate);
 
-    // 4. Validate sender can withdraw
+    // 5. Validate sender can withdraw
     senderWallet.assertCanWithdraw(money.amountUsdc);
     recipientWallet.assertCanTransact();
 
-    // 5. Get user token for Circle user-controlled signing
+    // 6. Get user token for Circle user-controlled signing
     const tokenResult = await this.walletProvider.getUserToken(command.senderUserId);
 
-    // 6. Initiate the transfer challenge on Circle
+    // 7. Initiate the transfer challenge on Circle
     const tokenId = this.getUsdcTokenId(senderWallet.blockchain);
     const challenge = await this.walletProvider.initiateTransfer({
       userToken: tokenResult.userToken,
@@ -110,7 +118,7 @@ export class ExecuteTransferHandler {
       idempotencyKey,
     });
 
-    // 7. Create transaction record with challengeId (PENDING_CHALLENGE status)
+    // 8. Create transaction record with challengeId (PENDING_CHALLENGE status)
     const transaction = await this.txRepo.create({
       idempotencyKey,
       type: 'TRANSFER_P2P',
@@ -124,9 +132,13 @@ export class ExecuteTransferHandler {
       counterpartyId: recipientWallet.id,
       description: command.description,
       challengeId: challenge.challengeId,
+      metadata: {
+        senderName: senderUser?.name ?? null,
+        recipientName: recipientUser?.name ?? null,
+      },
     });
 
-    // 8. Enqueue polling fallback + expiry jobs
+    // 10. Enqueue polling fallback + expiry jobs
     await this.circleTransferPollingQueue.add(
       `poll-transfer-${transaction.id}`,
       { transactionId: transaction.id },

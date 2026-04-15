@@ -22,6 +22,16 @@ export default function TransactionItem({ transaction, showYear = true }: Transa
     const credit = isCredit(transaction.direction);
     const statusColors = getStatusColors(transaction.status, theme);
 
+    const refLabel = (() => {
+        if (transaction.description) return transaction.description;
+        if (transaction.type === 'TRANSFER_P2P' && transaction.counterpartyName) {
+            return transaction.direction === 'IN'
+                ? `Virement de ${transaction.counterpartyName}`
+                : `À ${transaction.counterpartyName}`;
+        }
+        return transaction.externalRef ?? transaction.id.slice(0, 8);
+    })();
+
     return (
         <View style={styles.container}>
             <View style={[styles.iconWrap, { backgroundColor: theme.colors.primaryLight ?? theme.colors.surfaceVariant }]}>
@@ -30,9 +40,7 @@ export default function TransactionItem({ transaction, showYear = true }: Transa
 
             <View style={styles.details}>
                 <Text style={styles.type}>{t(`transactions.type.${transaction.type}`)}</Text>
-                <Text style={styles.ref}>
-                    {transaction.externalRef || transaction.id.slice(0, 8)}
-                </Text>
+                <Text style={styles.ref}>{refLabel}</Text>
                 <Text style={styles.date}>
                     {formatTxDate(transaction.createdAt, locale, showYear)}
                 </Text>

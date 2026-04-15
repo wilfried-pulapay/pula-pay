@@ -24,6 +24,7 @@ export interface TransactionHistoryItem {
   displayAmount: string | null;
   displayCurrency: string | null;
   description: string | null;
+  counterpartyName: string | null;
   createdAt: string;
   completedAt: string | null;
 }
@@ -82,19 +83,27 @@ export class GetTransactionHistoryHandler {
     const result = await this.txRepo.findByWalletId(wallet.id, filters, pagination);
 
     return {
-      items: result.items.map((tx) => ({
-        id: tx.id,
-        type: tx.type,
-        status: tx.status,
-        direction: this.getDirection(tx.type, tx.walletId, wallet.id),
-        amountUsdc: tx.amountUsdc.toString(),
-        feeUsdc: tx.feeUsdc.toString(),
-        displayAmount: tx.displayAmount?.toString() ?? null,
-        displayCurrency: tx.displayCurrency,
-        description: tx.description,
-        createdAt: tx.createdAt.toISOString(),
-        completedAt: tx.completedAt?.toISOString() ?? null,
-      })),
+      items: result.items.map((tx) => {
+        const direction = this.getDirection(tx.type, tx.walletId, wallet.id);
+        const meta = tx.metadata as Record<string, string | null> | null;
+        const counterpartyName = tx.type === 'TRANSFER_P2P'
+          ? (direction === 'IN' ? (meta?.senderName ?? null) : (meta?.recipientName ?? null))
+          : null;
+        return {
+          id: tx.id,
+          type: tx.type,
+          status: tx.status,
+          direction,
+          amountUsdc: tx.amountUsdc.toString(),
+          feeUsdc: tx.feeUsdc.toString(),
+          displayAmount: tx.displayAmount?.toString() ?? null,
+          displayCurrency: tx.displayCurrency,
+          description: tx.description,
+          counterpartyName,
+          createdAt: tx.createdAt.toISOString(),
+          completedAt: tx.completedAt?.toISOString() ?? null,
+        };
+      }),
       total: result.total,
       page: result.page,
       limit: result.limit,

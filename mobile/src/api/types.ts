@@ -95,6 +95,7 @@ export type TxDTO = {
 
     // Metadata
     description?: string;
+    counterpartyName?: string | null;
     txHash?: string;
 
     createdAt: string;
