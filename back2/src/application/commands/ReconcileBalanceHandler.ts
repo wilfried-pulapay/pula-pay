@@ -175,7 +175,7 @@ export class ReconcileBalanceHandler {
               feeUsdc: 0,
               walletId: wallet.id,
               externalRef,
-              description: 'Réconciliation : dépôt externe non tracé',
+              description: 'Reconciliation: untracked external deposit',
               completedAt: new Date(),
             },
           });

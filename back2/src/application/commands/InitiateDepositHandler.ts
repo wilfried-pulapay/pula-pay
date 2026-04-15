@@ -77,7 +77,7 @@ export class InitiateDepositHandler {
       displayCurrency: command.fiatCurrency,
       displayAmount: new Decimal(command.fiatAmount),
       walletId: wallet.id,
-      description: 'Rechargement',
+      description: 'Top-up via Coinbase',
     });
 
     // 5. Initiate deposit via provider (Coinbase CDP)

@@ -84,7 +84,7 @@ export class InitiateWithdrawalHandler {
       displayCurrency: command.fiatCurrency,
       displayAmount: fiatAmount,
       walletId: wallet.id,
-      description: 'Retrait',
+      description: 'Withdrawal via Coinbase',
     });
 
     // 7. Initiate payout via provider (Coinbase CDP)
