@@ -1,6 +1,5 @@
 import { createCoinbasePollingWorker } from './workers/coinbase-poll.worker';
 import { createTxExpiryWorker } from './workers/tx-expiry.worker';
-import { createFaucetWorker } from './workers/faucet.worker';
 import { createCircleTransferPollingWorker } from './workers/circle-transfer-poll.worker';
 import { createBalanceReconciliationWorker } from './workers/balance-reconciliation.worker';
 import { balanceReconciliationQueue } from './queues';
@@ -32,8 +31,6 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
     transactionRepo: deps.transactionRepo,
   });
 
-  const faucetWorker = createFaucetWorker();
-
   const circleTransferWorker = createCircleTransferPollingWorker({
     walletProvider: deps.walletProvider,
     walletRepo: deps.walletRepo,
@@ -61,13 +58,12 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
     await Promise.all([
       coinbaseWorker.close(),
       expiryWorker.close(),
-      faucetWorker.close(),
       circleTransferWorker.close(),
       reconciliationWorker.close(),
     ]);
     logger.info('All workers stopped');
   };
 
-  logger.info('BullMQ workers started: coinbase-polling, tx-expiry, faucet, circle-transfer-polling, balance-reconciliation');
-  return { coinbaseWorker, expiryWorker, faucetWorker, circleTransferWorker, reconciliationWorker, shutdown };
+  logger.info('BullMQ workers started: coinbase-polling, tx-expiry, circle-transfer-polling, balance-reconciliation');
+  return { coinbaseWorker, expiryWorker, circleTransferWorker, reconciliationWorker, shutdown };
 }
