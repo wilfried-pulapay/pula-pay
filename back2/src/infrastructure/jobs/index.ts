@@ -3,6 +3,7 @@ import { createTxExpiryWorker } from './workers/tx-expiry.worker';
 import { createCircleTransferPollingWorker } from './workers/circle-transfer-poll.worker';
 import { createBalanceReconciliationWorker } from './workers/balance-reconciliation.worker';
 import { balanceReconciliationQueue } from './queues';
+import { PrismaClient } from '@prisma/client';
 import { CoinbaseCdpOnRampAdapter } from '../adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
@@ -12,6 +13,7 @@ import { TransactionRepository } from '../../domain/ports/repositories/Transacti
 import { logger } from '../../shared/utils/logger';
 
 export interface WorkerDependencies {
+  prisma: PrismaClient;
   coinbaseCdpAdapter: CoinbaseCdpOnRampAdapter;
   confirmDepositHandler: ConfirmDepositHandler;
   confirmTransferHandler: ConfirmTransferHandler;
@@ -39,8 +41,10 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
   });
 
   const reconciliationWorker = createBalanceReconciliationWorker({
+    prisma: deps.prisma,
     walletProvider: deps.walletProvider,
     walletRepo: deps.walletRepo,
+    transactionRepo: deps.transactionRepo,
   });
 
   // Schedule repeatable reconciliation job (every hour)

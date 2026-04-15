@@ -77,7 +77,7 @@ export function createRouter(prisma: PrismaClient): Router {
   const confirmTransferHandler = new ConfirmTransferHandler(prisma, txRepo, walletRepo);
   const activateWalletHandler = new ActivateWalletHandler(walletRepo);
   const syncWalletStatusHandler = new SyncWalletStatusHandler(walletRepo, circleAdapter);
-  const reconcileBalanceHandler = new ReconcileBalanceHandler(walletRepo, circleAdapter);
+  const reconcileBalanceHandler = new ReconcileBalanceHandler(prisma, walletRepo, txRepo, circleAdapter);
   const balanceHandler = new GetBalanceHandler(userRepo, walletRepo, exchangeRateAdapter);
   const historyHandler = new GetTransactionHistoryHandler(walletRepo, txRepo);
   const transactionByIdHandler = new GetTransactionByIdHandler(walletRepo, txRepo);

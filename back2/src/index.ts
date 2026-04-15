@@ -117,6 +117,7 @@ async function bootstrap(): Promise<void> {
   const confirmTransferHandler = new ConfirmTransferHandler(prisma, txRepo, walletRepo);
 
   const workers = await bootstrapWorkers({
+    prisma,
     coinbaseCdpAdapter,
     confirmDepositHandler,
     confirmTransferHandler,

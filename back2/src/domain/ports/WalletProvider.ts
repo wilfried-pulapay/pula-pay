@@ -61,6 +61,15 @@ export interface CircleTransferInfo {
   txHash?: string;
 }
 
+// ─── Inbound transaction info (for reconciliation) ───────────────────────────
+
+export interface CircleInboundInfo {
+  id: string;
+  status: 'pending' | 'complete' | 'failed';
+  amount: string;
+  txHash?: string;
+}
+
 // ─── Wallet details ───────────────────────────────────────────────────────────
 
 export interface WalletDetails {
@@ -111,6 +120,9 @@ export interface WalletProvider {
 
   // Fee estimation
   estimateFee(params: EstimateFeeParams): Promise<string>;
+
+  // Inbound transactions (for reconciliation)
+  listInboundTransactions(circleWalletId: string, userToken: string): Promise<CircleInboundInfo[]>;
 
   // Webhook signature verification
   verifyWebhookSignature(rawBody: string, signature: string): Promise<boolean>;

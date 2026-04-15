@@ -11,6 +11,7 @@ import {
   EstimateFeeParams,
   ChallengeStatusResult,
   CircleTransferInfo,
+  CircleInboundInfo,
 } from '../../../domain/ports/WalletProvider';
 import { config } from '../../../shared/config';
 import { logger } from '../../../shared/utils/logger';
@@ -264,6 +265,22 @@ export class CircleWalletAdapter implements WalletProvider {
     return (result.transactions ?? []).map((tx) => ({
       id: tx.id,
       status: this.mapCircleStatus(tx.state),
+      txHash: tx.txHash,
+    }));
+  }
+
+  async listInboundTransactions(circleWalletId: string, userToken: string): Promise<CircleInboundInfo[]> {
+    const result = await this.request<{ transactions: CircleTransaction[] }>(
+      'GET',
+      `/transactions?walletIds[]=${encodeURIComponent(circleWalletId)}&transactionType=INBOUND`,
+      undefined,
+      userToken
+    );
+
+    return (result.transactions ?? []).map((tx) => ({
+      id: tx.id,
+      status: this.mapCircleStatus(tx.state),
+      amount: tx.amounts?.[0] ?? '0',
       txHash: tx.txHash,
     }));
   }
