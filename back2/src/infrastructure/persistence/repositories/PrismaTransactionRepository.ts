@@ -93,6 +93,13 @@ export class PrismaTransactionRepository implements TransactionRepository {
     return this.toDomain(tx);
   }
 
+  async setChallengeId(id: string, challengeId: string): Promise<void> {
+    await this.prisma.transaction.update({
+      where: { id },
+      data: { challengeId },
+    });
+  }
+
   async update(transaction: Transaction): Promise<Transaction> {
     const props = transaction.toPersistence();
     const updated = await this.prisma.transaction.update({

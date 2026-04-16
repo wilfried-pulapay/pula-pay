@@ -104,11 +104,11 @@ export class ConfirmTransferHandler {
 
       await tx.wallet.update({
         where: { id: senderWallet.id },
-        data: { balanceUsdc: senderWallet.balance.toNumber() },
+        data: { balanceUsdc: { decrement: transaction.amountUsdc.toNumber() } },
       });
       await tx.wallet.update({
         where: { id: recipientWallet.id },
-        data: { balanceUsdc: recipientWallet.balance.toNumber() },
+        data: { balanceUsdc: { increment: transaction.amountUsdc.toNumber() } },
       });
 
       for (const entry of entries) {

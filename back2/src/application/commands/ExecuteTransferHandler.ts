@@ -104,18 +104,9 @@ export class ExecuteTransferHandler {
     // 6. Get user token for Circle user-controlled signing
     const tokenResult = await this.walletProvider.getUserToken(command.senderUserId);
 
-    // 7. Initiate the transfer challenge on Circle
+    // 7. Create DB record before calling Circle so there is always a record to track
+    //    the challenge. challengeId is patched in after Circle responds.
     const tokenId = this.getUsdcTokenId(senderWallet.blockchain);
-    const challenge = await this.walletProvider.initiateTransfer({
-      userToken: tokenResult.userToken,
-      fromWalletId: senderWallet.circleWalletId,
-      toAddress: recipientWallet.address,
-      amount: money.amountUsdc.toString(),
-      tokenId,
-      idempotencyKey,
-    });
-
-    // 8. Create transaction record with challengeId (PENDING_CHALLENGE status)
     const transaction = await this.txRepo.create({
       idempotencyKey,
       type: 'TRANSFER_P2P',
@@ -128,12 +119,32 @@ export class ExecuteTransferHandler {
       walletId: senderWallet.id,
       counterpartyId: recipientWallet.id,
       description: command.description,
-      challengeId: challenge.challengeId,
+      challengeId: undefined,
       metadata: {
         senderName: senderUser?.name ?? null,
         recipientName: recipientUser?.name ?? null,
       },
     });
+
+    // 8. Initiate the transfer challenge on Circle; mark FAILED if Circle rejects
+    let challenge: { challengeId: string };
+    try {
+      challenge = await this.walletProvider.initiateTransfer({
+        userToken: tokenResult.userToken,
+        fromWalletId: senderWallet.circleWalletId,
+        toAddress: recipientWallet.address,
+        amount: money.amountUsdc.toString(),
+        tokenId,
+        idempotencyKey,
+      });
+    } catch (err) {
+      transaction.fail('Circle transfer initiation failed');
+      await this.txRepo.update(transaction);
+      throw err;
+    }
+
+    // 9. Persist the challengeId returned by Circle
+    await this.txRepo.setChallengeId(transaction.id, challenge.challengeId);
 
     logger.info(
       {
