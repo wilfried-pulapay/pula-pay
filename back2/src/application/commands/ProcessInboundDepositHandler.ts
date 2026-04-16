@@ -2,7 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
+import { UserRepository } from '../../domain/ports/repositories/UserRepository';
+import { ExchangeRateProvider } from '../../domain/ports/ExchangeRateProvider';
 import { LedgerService } from '../../domain/services/LedgerService';
+import { Money } from '../../domain/value-objects/Money';
 import { logger } from '../../shared/utils/logger';
 
 export interface ProcessInboundDepositCommand {
@@ -26,6 +29,8 @@ export class ProcessInboundDepositHandler {
     private readonly prisma: PrismaClient,
     private readonly txRepo: TransactionRepository,
     private readonly walletRepo: WalletRepository,
+    private readonly userRepo: UserRepository,
+    private readonly exchangeRateProvider: ExchangeRateProvider,
   ) {}
 
   async execute(command: ProcessInboundDepositCommand): Promise<void> {
@@ -55,7 +60,13 @@ export class ProcessInboundDepositHandler {
       return;
     }
 
-    // 3. Atomic: create transaction + ledger entries + credit wallet
+    // 3. Resolve display currency from user preference, then fetch exchange rate
+    const user = await this.userRepo.findById(wallet.userId);
+    const displayCurrency = user?.displayCurrency ?? 'EUR';
+    const rate = await this.exchangeRateProvider.getRate(displayCurrency);
+    const money = Money.fromUsdc(amount, displayCurrency, rate.rate);
+
+    // 4. Atomic: create transaction + ledger entries + credit wallet
     await this.prisma.$transaction(async (tx) => {
       // Create the transaction record directly as COMPLETED (already settled on-chain)
       const txRecord = await tx.transaction.create({
@@ -65,6 +76,9 @@ export class ProcessInboundDepositHandler {
           status: 'COMPLETED',
           amountUsdc: amount.toNumber(),
           feeUsdc: 0,
+          exchangeRate: rate.rate.toNumber(),
+          displayCurrency,
+          displayAmount: money.displayAmount.toNumber(),
           walletId: wallet.id,
           externalRef: command.circleTransactionId,
           description: 'Direct on-chain deposit',

@@ -77,7 +77,7 @@ export function createRouter(prisma: PrismaClient): Router {
   const confirmTransferHandler = new ConfirmTransferHandler(prisma, txRepo, walletRepo);
   const activateWalletHandler = new ActivateWalletHandler(walletRepo);
   const syncWalletStatusHandler = new SyncWalletStatusHandler(walletRepo, circleAdapter);
-  const reconcileBalanceHandler = new ReconcileBalanceHandler(prisma, walletRepo, txRepo, circleAdapter);
+  const reconcileBalanceHandler = new ReconcileBalanceHandler(prisma, walletRepo, txRepo, circleAdapter, exchangeRateAdapter);
   const balanceHandler = new GetBalanceHandler(userRepo, walletRepo, exchangeRateAdapter);
   const historyHandler = new GetTransactionHistoryHandler(walletRepo, txRepo);
   const transactionByIdHandler = new GetTransactionByIdHandler(walletRepo, txRepo);
@@ -109,7 +109,7 @@ export function createRouter(prisma: PrismaClient): Router {
     reconcileBalanceHandler,
     estimateTransferFeeHandler,
   );
-  const processInboundDepositHandler = new ProcessInboundDepositHandler(prisma, txRepo, walletRepo);
+  const processInboundDepositHandler = new ProcessInboundDepositHandler(prisma, txRepo, walletRepo, userRepo, exchangeRateAdapter);
   const webhookController = new WebhookController(confirmDepositHandler, confirmTransferHandler, activateWalletHandler, processInboundDepositHandler, coinbaseCdpAdapter, coinbasePollingQueue, txExpiryQueue, circleAdapter);
   const rateController = new ExchangeRateController(rateHandler, conversionService);
   const healthController = new HealthController(prisma);

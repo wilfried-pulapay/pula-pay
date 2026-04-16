@@ -3,7 +3,9 @@ import Decimal from 'decimal.js';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
+import { ExchangeRateProvider } from '../../domain/ports/ExchangeRateProvider';
 import { LedgerService } from '../../domain/services/LedgerService';
+import { Money } from '../../domain/value-objects/Money';
 import { WalletNotFoundError } from '../../domain/errors/WalletNotFoundError';
 import { generateIdempotencyKey } from '../../shared/utils/idempotency';
 import { logger } from '../../shared/utils/logger';
@@ -44,6 +46,7 @@ export class ReconcileBalanceHandler {
     private readonly walletRepo: WalletRepository,
     private readonly txRepo: TransactionRepository,
     private readonly walletProvider: WalletProvider,
+    private readonly exchangeRateProvider: ExchangeRateProvider,
   ) {}
 
   async execute(command: ReconcileBalanceCommand): Promise<ReconcileBalanceResult> {
@@ -53,6 +56,14 @@ export class ReconcileBalanceHandler {
     }
 
     const dbBalance = wallet.balance;
+
+    // Resolve user's display currency preference for transaction records
+    const userRow = await this.prisma.user.findUnique({
+      where: { id: command.userId },
+      select: { displayCurrency: true },
+    });
+    const displayCurrency = userRow?.displayCurrency ?? 'EUR';
+    const rate = await this.exchangeRateProvider.getRate(displayCurrency);
 
     const { userToken } = await this.walletProvider.getUserToken(command.userId);
     const circleBalanceData = await this.walletProvider.getBalance(wallet.circleWalletId, userToken);
@@ -125,6 +136,7 @@ export class ReconcileBalanceHandler {
       }
 
       await this.prisma.$transaction(async (tx) => {
+        const money = Money.fromUsdc(amount, displayCurrency, rate.rate);
         const txRecord = await tx.transaction.create({
           data: {
             idempotencyKey: `inbound-${inboundTx.id}`,
@@ -132,6 +144,9 @@ export class ReconcileBalanceHandler {
             status: 'COMPLETED',
             amountUsdc: amount.toNumber(),
             feeUsdc: 0,
+            exchangeRate: rate.rate.toNumber(),
+            displayCurrency,
+            displayAmount: money.displayAmount.toNumber(),
             walletId: wallet.id,
             externalRef: inboundTx.id,
             description: 'Direct on-chain deposit',
@@ -181,6 +196,7 @@ export class ReconcileBalanceHandler {
       const existing = await this.txRepo.findByExternalRef(externalRef);
       if (!existing) {
         await this.prisma.$transaction(async (tx) => {
+          const residualMoney = Money.fromUsdc(residual, displayCurrency, rate.rate);
           const txRecord = await tx.transaction.create({
             data: {
               idempotencyKey: generateIdempotencyKey(),
@@ -188,6 +204,9 @@ export class ReconcileBalanceHandler {
               status: 'COMPLETED',
               amountUsdc: residual.toNumber(),
               feeUsdc: 0,
+              exchangeRate: rate.rate.toNumber(),
+              displayCurrency,
+              displayAmount: residualMoney.displayAmount.toNumber(),
               walletId: wallet.id,
               externalRef,
               description: 'Reconciliation: untracked external deposit',

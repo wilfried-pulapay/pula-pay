@@ -18,6 +18,8 @@ import { redis } from './infrastructure/cache/redis-cache';
 // Adapters for worker dependencies
 import { CoinbaseCdpOnRampAdapter } from './infrastructure/adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
 import { CircleWalletAdapter } from './infrastructure/adapters/circle/CircleWalletAdapter';
+import { CoingeckoAdapter } from './infrastructure/adapters/exchange/CoingeckoAdapter';
+import { CachedExchangeRateAdapter } from './infrastructure/adapters/exchange/CachedExchangeRateAdapter';
 import { ConfirmDepositHandler } from './application/commands/ConfirmDepositHandler';
 import { ConfirmTransferHandler } from './application/commands/ConfirmTransferHandler';
 import { PrismaTransactionRepository } from './infrastructure/persistence/repositories/PrismaTransactionRepository';
@@ -115,6 +117,8 @@ async function bootstrap(): Promise<void> {
   // Bootstrap BullMQ workers
   const coinbaseCdpAdapter = new CoinbaseCdpOnRampAdapter();
   const circleAdapter = new CircleWalletAdapter();
+  const coingeckoAdapter = new CoingeckoAdapter();
+  const exchangeRateAdapter = new CachedExchangeRateAdapter(coingeckoAdapter);
   const txRepo = new PrismaTransactionRepository(prisma);
   const walletRepo = new PrismaWalletRepository(prisma);
   const confirmDepositHandler = new ConfirmDepositHandler(prisma, txRepo, walletRepo);
@@ -128,6 +132,7 @@ async function bootstrap(): Promise<void> {
     walletProvider: circleAdapter,
     walletRepo,
     transactionRepo: txRepo,
+    exchangeRateProvider: exchangeRateAdapter,
   });
 
   // Start server

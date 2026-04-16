@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { CoinbaseCdpOnRampAdapter } from '../adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
+import { ExchangeRateProvider } from '../../domain/ports/ExchangeRateProvider';
 import { ConfirmDepositHandler } from '../../application/commands/ConfirmDepositHandler';
 import { ConfirmTransferHandler } from '../../application/commands/ConfirmTransferHandler';
 import { TransactionRepository } from '../../domain/ports/repositories/TransactionRepository';
@@ -19,6 +20,7 @@ export interface WorkerDependencies {
   walletProvider: WalletProvider;
   walletRepo: WalletRepository;
   transactionRepo: TransactionRepository;
+  exchangeRateProvider: ExchangeRateProvider;
 }
 
 export async function bootstrapWorkers(deps: WorkerDependencies) {
@@ -33,6 +35,7 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
     walletProvider: deps.walletProvider,
     walletRepo: deps.walletRepo,
     transactionRepo: deps.transactionRepo,
+    exchangeRateProvider: deps.exchangeRateProvider,
   });
 
   const circleTransferSweepWorker = createCircleTransferSweepWorker({

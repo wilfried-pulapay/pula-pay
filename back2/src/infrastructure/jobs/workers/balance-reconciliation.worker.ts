@@ -4,6 +4,7 @@ import { redisConnection } from '../connection';
 import { WalletProvider } from '../../../domain/ports/WalletProvider';
 import { WalletRepository } from '../../../domain/ports/repositories/WalletRepository';
 import { TransactionRepository } from '../../../domain/ports/repositories/TransactionRepository';
+import { ExchangeRateProvider } from '../../../domain/ports/ExchangeRateProvider';
 import { ReconcileBalanceHandler } from '../../../application/commands/ReconcileBalanceHandler';
 import { logger } from '../../../shared/utils/logger';
 
@@ -12,12 +13,14 @@ export function createBalanceReconciliationWorker(deps: {
   walletProvider: WalletProvider;
   walletRepo: WalletRepository;
   transactionRepo: TransactionRepository;
+  exchangeRateProvider: ExchangeRateProvider;
 }) {
   const reconcileHandler = new ReconcileBalanceHandler(
     deps.prisma,
     deps.walletRepo,
     deps.transactionRepo,
     deps.walletProvider,
+    deps.exchangeRateProvider,
   );
 
   return new Worker(
