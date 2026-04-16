@@ -103,11 +103,26 @@ export class ReconcileBalanceHandler {
     const completedInbound = inboundTxs.filter((tx) => tx.status === 'complete');
 
     for (const inboundTx of completedInbound) {
+      // Guard: stop if we've already reached Circle's balance — further credits would overcredit
+      if (wallet.balance.gte(circleBalance)) {
+        logger.warn({ walletId: wallet.id, dbBalance: wallet.balance.toString(), circleBalance: circleBalance.toString() }, 'Reconciliation guard: DB balance reached Circle balance, stopping Pass 1');
+        break;
+      }
+
       const existing = await this.txRepo.findByExternalRef(inboundTx.id);
       if (existing) continue;
 
       const amount = new Decimal(inboundTx.amount);
       if (amount.lte(0)) continue;
+
+      // Guard: skip if this single tx would push DB balance above Circle balance
+      if (wallet.balance.add(amount).gt(circleBalance)) {
+        logger.warn(
+          { walletId: wallet.id, circleTransactionId: inboundTx.id, amount: amount.toString(), wouldReach: wallet.balance.add(amount).toString(), circleBalance: circleBalance.toString() },
+          'Reconciliation guard: skipping inbound tx — would overcredit wallet, manual review required'
+        );
+        continue;
+      }
 
       await this.prisma.$transaction(async (tx) => {
         const txRecord = await tx.transaction.create({

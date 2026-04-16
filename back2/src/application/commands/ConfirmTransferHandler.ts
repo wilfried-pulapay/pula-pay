@@ -79,13 +79,27 @@ export class ConfirmTransferHandler {
       recipientWallet.balance,
     );
 
-    // 7. Atomic: debit sender, credit recipient, persist ledger, complete transaction
-    transaction.markProcessing(command.circleTransferId);
+    // 7. Mutate in-memory state
     senderWallet.debit(transaction.amountUsdc);
     recipientWallet.credit(transaction.amountUsdc);
     transaction.complete();
 
+    // 8. Atomic: optimistic lock + wallet updates + ledger + recipient record + sender completion
     await this.prisma.$transaction(async (tx) => {
+      // Fix 1: Optimistic lock — atomically claim PENDING → PROCESSING.
+      // Only one concurrent caller can affect 1 row; the other sees count=0 and exits.
+      const { count } = await tx.transaction.updateMany({
+        where: { id: transaction.id, status: 'PENDING' },
+        data: { status: 'PROCESSING' },
+      });
+      if (count === 0) {
+        logger.info(
+          { transactionId: transaction.id },
+          'Transfer already claimed by concurrent call, skipping'
+        );
+        return;
+      }
+
       await tx.wallet.update({
         where: { id: senderWallet.id },
         data: { balanceUsdc: senderWallet.balance.toNumber() },
@@ -107,6 +121,26 @@ export class ConfirmTransferHandler {
           },
         });
       }
+
+      // Fix 2: Create recipient transaction record so it appears in history
+      // and reconciliation can identify it via externalRef (prevents DEPOSIT_CRYPTO phantom).
+      await tx.transaction.create({
+        data: {
+          idempotencyKey: `receive-${transaction.id}`,
+          type: 'TRANSFER_P2P',
+          status: 'COMPLETED',
+          amountUsdc: transaction.amountUsdc.toNumber(),
+          feeUsdc: 0,
+          exchangeRate: transaction.exchangeRate?.toNumber() ?? 1,
+          displayCurrency: transaction.displayCurrency ?? undefined,
+          displayAmount: transaction.displayAmount?.toNumber() ?? undefined,
+          walletId: recipientWallet.id,
+          counterpartyId: senderWallet.id,
+          externalRef: command.circleTransferId ?? null,
+          description: transaction.description ?? null,
+          completedAt: new Date(),
+        },
+      });
 
       await tx.transaction.update({
         where: { id: transaction.id },

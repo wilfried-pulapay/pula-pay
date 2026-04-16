@@ -62,21 +62,14 @@ export class LedgerService {
     return this.createEntries({
       transactionId,
       entries: [
-        // Credit: Escrow receives fiat (converted to USDC)
-        {
-          walletId: null,
-          accountType: 'ESCROW',
-          amount: amount,
-          currentBalance: new Decimal(0),
-        },
-        // Debit: Escrow transfers to user
+        // Debit: Escrow pays out USDC to user
         {
           walletId: null,
           accountType: 'ESCROW',
           amount: amount.neg(),
-          currentBalance: amount,
+          currentBalance: new Decimal(0),
         },
-        // Credit: User receives (minus fees)
+        // Credit: User receives net amount (after fees)
         {
           walletId: userWalletId,
           accountType: 'USER',
@@ -109,26 +102,19 @@ export class LedgerService {
     return this.createEntries({
       transactionId,
       entries: [
-        // Debit: User
+        // Debit: User pays amount + fee
         {
           walletId: userWalletId,
           accountType: 'USER',
           amount: totalDebit.neg(),
           currentBalance: userBalance,
         },
-        // Credit: Escrow receives for payout
+        // Credit: Escrow receives USDC for fiat payout
         {
           walletId: null,
           accountType: 'ESCROW',
           amount: amount,
           currentBalance: new Decimal(0),
-        },
-        // Debit: Escrow sends fiat
-        {
-          walletId: null,
-          accountType: 'ESCROW',
-          amount: amount.neg(),
-          currentBalance: amount,
         },
         // Credit: Fees collected
         {
@@ -185,21 +171,14 @@ export class LedgerService {
     return this.createEntries({
       transactionId,
       entries: [
-        // Credit: External source (represents on-chain arrival)
-        {
-          walletId: null,
-          accountType: 'LIQUIDITY',
-          amount: amount,
-          currentBalance: new Decimal(0),
-        },
-        // Debit: Liquidity pool
+        // Debit: External on-chain source (USDC arrives from blockchain)
         {
           walletId: null,
           accountType: 'LIQUIDITY',
           amount: amount.neg(),
-          currentBalance: amount,
+          currentBalance: new Decimal(0),
         },
-        // Credit: User
+        // Credit: User receives
         {
           walletId: userWalletId,
           accountType: 'USER',
