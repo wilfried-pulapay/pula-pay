@@ -19,17 +19,16 @@ export const txExpiryQueue = new Queue('tx-expiry', {
   },
 });
 
-export const circleTransferPollingQueue = new Queue('circle-transfer-polling', {
+export const balanceReconciliationQueue = new Queue('balance-reconciliation', {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 40,
-    backoff: { type: 'fixed', delay: 15_000 },
+    attempts: 1,
     removeOnComplete: { age: 86400 },
     removeOnFail: { age: 604800 },
   },
 });
 
-export const balanceReconciliationQueue = new Queue('balance-reconciliation', {
+export const circleTransferSweepQueue = new Queue('circle-transfer-sweep', {
   connection: redisConnection,
   defaultJobOptions: {
     attempts: 1,

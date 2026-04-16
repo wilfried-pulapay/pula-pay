@@ -1,8 +1,7 @@
 import { createCoinbasePollingWorker } from './workers/coinbase-poll.worker';
-import { createTxExpiryWorker } from './workers/tx-expiry.worker';
-import { createCircleTransferPollingWorker } from './workers/circle-transfer-poll.worker';
 import { createBalanceReconciliationWorker } from './workers/balance-reconciliation.worker';
-import { balanceReconciliationQueue } from './queues';
+import { createCircleTransferSweepWorker } from './workers/circle-transfer-sweep.worker';
+import { balanceReconciliationQueue, circleTransferSweepQueue } from './queues';
 import { PrismaClient } from '@prisma/client';
 import { CoinbaseCdpOnRampAdapter } from '../adapters/coinbase-cdp/CoinbaseCdpOnRampAdapter';
 import { WalletProvider } from '../../domain/ports/WalletProvider';
@@ -29,17 +28,6 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
     transactionRepo: deps.transactionRepo,
   });
 
-  const expiryWorker = createTxExpiryWorker({
-    transactionRepo: deps.transactionRepo,
-  });
-
-  const circleTransferWorker = createCircleTransferPollingWorker({
-    walletProvider: deps.walletProvider,
-    walletRepo: deps.walletRepo,
-    transactionRepo: deps.transactionRepo,
-    confirmTransferHandler: deps.confirmTransferHandler,
-  });
-
   const reconciliationWorker = createBalanceReconciliationWorker({
     prisma: deps.prisma,
     walletProvider: deps.walletProvider,
@@ -47,7 +35,14 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
     transactionRepo: deps.transactionRepo,
   });
 
-  // Schedule repeatable reconciliation job (every hour)
+  const circleTransferSweepWorker = createCircleTransferSweepWorker({
+    walletProvider: deps.walletProvider,
+    walletRepo: deps.walletRepo,
+    transactionRepo: deps.transactionRepo,
+    confirmTransferHandler: deps.confirmTransferHandler,
+  });
+
+  // Schedule repeatable jobs
   await balanceReconciliationQueue.add(
     'reconcile-balances',
     {},
@@ -57,17 +52,25 @@ export async function bootstrapWorkers(deps: WorkerDependencies) {
     }
   );
 
+  await circleTransferSweepQueue.add(
+    'sweep-transfers',
+    {},
+    {
+      repeat: { every: 120_000 },
+      jobId: 'circle-transfer-sweep-repeatable',
+    }
+  );
+
   const shutdown = async () => {
     logger.info('Shutting down workers...');
     await Promise.all([
       coinbaseWorker.close(),
-      expiryWorker.close(),
-      circleTransferWorker.close(),
       reconciliationWorker.close(),
+      circleTransferSweepWorker.close(),
     ]);
     logger.info('All workers stopped');
   };
 
-  logger.info('BullMQ workers started: coinbase-polling, tx-expiry, circle-transfer-polling, balance-reconciliation');
-  return { coinbaseWorker, expiryWorker, circleTransferWorker, reconciliationWorker, shutdown };
+  logger.info('BullMQ workers started: coinbase-polling, balance-reconciliation, circle-transfer-sweep');
+  return { coinbaseWorker, reconciliationWorker, circleTransferSweepWorker, shutdown };
 }

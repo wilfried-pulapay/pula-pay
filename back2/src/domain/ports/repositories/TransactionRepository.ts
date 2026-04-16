@@ -51,6 +51,7 @@ export interface TransactionRepository {
   ): Promise<PaginatedResult<Transaction>>;
   create(params: CreateTransactionParams): Promise<Transaction>;
   update(transaction: Transaction): Promise<Transaction>;
+  findStalePendingTransfers(olderThan: Date): Promise<Transaction[]>;
   createOnRampDetails(params: CreateOnRampDetailsParams): Promise<void>;
   updateOnRampStatus(transactionId: string, status: string, data?: Record<string, unknown>): Promise<void>;
 }

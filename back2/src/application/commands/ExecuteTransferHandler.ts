@@ -1,5 +1,4 @@
 import Decimal from 'decimal.js';
-import { Queue } from 'bullmq';
 import { Currency, Blockchain } from '@prisma/client';
 import { WalletRepository } from '../../domain/ports/repositories/WalletRepository';
 import { UserRepository } from '../../domain/ports/repositories/UserRepository';
@@ -47,8 +46,6 @@ export class ExecuteTransferHandler {
     private readonly txRepo: TransactionRepository,
     private readonly walletProvider: WalletProvider,
     private readonly exchangeRateProvider: ExchangeRateProvider,
-    private readonly circleTransferPollingQueue: Queue,
-    private readonly txExpiryQueue: Queue,
   ) {}
 
   async execute(command: TransferCommand): Promise<TransferResult> {
@@ -137,18 +134,6 @@ export class ExecuteTransferHandler {
         recipientName: recipientUser?.name ?? null,
       },
     });
-
-    // 10. Enqueue polling fallback + expiry jobs
-    await this.circleTransferPollingQueue.add(
-      `poll-transfer-${transaction.id}`,
-      { transactionId: transaction.id },
-      { delay: 30_000, jobId: idempotencyKey }
-    );
-    await this.txExpiryQueue.add(
-      `expire-${transaction.id}`,
-      { transactionId: transaction.id },
-      { delay: 1_200_000, jobId: `expire-${idempotencyKey}` }
-    );
 
     logger.info(
       {

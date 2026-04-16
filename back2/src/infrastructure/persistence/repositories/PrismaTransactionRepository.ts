@@ -123,6 +123,14 @@ export class PrismaTransactionRepository implements TransactionRepository {
     });
   }
 
+  async findStalePendingTransfers(olderThan: Date): Promise<Transaction[]> {
+    const txs = await this.prisma.transaction.findMany({
+      where: { type: 'TRANSFER_P2P', status: 'PENDING', createdAt: { lt: olderThan } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return txs.map((tx) => this.toDomain(tx));
+  }
+
   async updateOnRampStatus(
     transactionId: string,
     status: string,
