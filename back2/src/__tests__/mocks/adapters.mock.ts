@@ -5,6 +5,7 @@ import {
   WalletBalance,
   WalletDetails,
   EstimateFeeParams,
+  CircleInboundInfo,
 } from '@domain/ports/WalletProvider';
 import {
   OnRampProvider,
@@ -34,6 +35,7 @@ export const createMockWalletProvider = (): jest.Mocked<WalletProvider> => ({
   getTransferStatus: jest.fn(),
   listWalletTransactions: jest.fn(),
   estimateFee: jest.fn(),
+  listInboundTransactions: jest.fn(),
   verifyWebhookSignature: jest.fn(),
 });
 
@@ -150,6 +152,10 @@ export class InMemoryWalletProvider implements WalletProvider {
 
   async estimateFee(_params: EstimateFeeParams): Promise<string> {
     return '0.001';
+  }
+
+  async listInboundTransactions(_circleWalletId: string, _userToken: string): Promise<CircleInboundInfo[]> {
+    return [];
   }
 
   async verifyWebhookSignature(_rawBody: string, _signature: string): Promise<boolean> {

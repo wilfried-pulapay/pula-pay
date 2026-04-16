@@ -29,12 +29,14 @@ export class ConfirmTransferHandler {
     }
 
     // 2. Find the pending P2P transaction for this wallet
+    // Use limit > 1 because findByWalletId queries (walletId=X OR counterpartyId=X),
+    // so it may return incoming PENDING transfers as well. We only want the outgoing one.
     const { items } = await this.txRepo.findByWalletId(
       senderWallet.id,
       { type: 'TRANSFER_P2P', status: 'PENDING' },
-      { page: 1, limit: 1 }
+      { page: 1, limit: 10 }
     );
-    const transaction = items[0];
+    const transaction = items.find((tx) => tx.walletId === senderWallet.id);
     if (!transaction) {
       logger.info(
         { circleWalletId: command.circleWalletId },
@@ -136,7 +138,7 @@ export class ConfirmTransferHandler {
           displayAmount: transaction.displayAmount?.toNumber() ?? undefined,
           walletId: recipientWallet.id,
           counterpartyId: senderWallet.id,
-          externalRef: command.circleTransferId ?? null,
+          externalRef: null, // sender's record carries the unique circleTransferId for reconciliation
           description: transaction.description ?? null,
           completedAt: new Date(),
         },
