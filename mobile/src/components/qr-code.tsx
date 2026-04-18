@@ -4,7 +4,11 @@ import QRCode from 'react-native-qrcode-svg';
 import { Share2 } from 'lucide-react-native';
 import { useTheme } from '@/src/theme';
 import { useStyles } from '@/src/hooks/use-styles';
+import { FONTS, SIZES } from '@/src/constants/theme';
 import type { Theme } from '@/src/theme/types';
+
+// QR codes require a plain white background for reliable scanning
+const QR_CONTAINER_BG = '#FFFFFF';
 
 type ReceiveQRCodeProps = {
     address: string | null;
@@ -94,7 +98,7 @@ export default function ReceiveQRCode({
             </Text>
 
             <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-                <Share2 size={20} color={theme.colors.primary} />
+                <Share2 size={SIZES.iconMd} color={theme.colors.primary} />
                 <Text style={styles.shareText}>{t('receive.share')}</Text>
             </TouchableOpacity>
         </View>
@@ -107,37 +111,38 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         padding: theme.spacing.m,
     },
     title: {
-        fontSize: 22,
-        fontWeight: '700',
-        letterSpacing: -0.5,
+        fontFamily: FONTS.sansBold,
+        fontSize: theme.typography.h2.fontSize,
+        letterSpacing: theme.typography.h2.letterSpacing,
         color: theme.colors.text,
         marginBottom: theme.spacing.m,
     },
     qrContainer: {
-        padding: 20,
-        backgroundColor: '#FFFFFF',
+        padding: theme.spacing.l - 4,
+        backgroundColor: QR_CONTAINER_BG,
         borderRadius: theme.borderRadius.l,
         marginBottom: theme.spacing.m,
         borderWidth: 1,
         borderColor: theme.colors.border,
-        shadowColor: '#000',
+        shadowColor: theme.colors.ink,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.07,
-        shadowRadius: 8,
+        shadowRadius: theme.spacing.s,
         elevation: 2,
     },
     warningBanner: {
-        backgroundColor: 'rgba(255,107,0,0.10)',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
+        backgroundColor: theme.colors.primaryLight,
+        paddingVertical: theme.spacing.m - 4,
+        paddingHorizontal: theme.spacing.m,
         borderRadius: theme.borderRadius.m,
         borderWidth: 1,
-        borderColor: 'rgba(255,107,0,0.25)',
+        borderColor: theme.colors.primaryBorder,
         marginBottom: theme.spacing.m,
     },
     warningText: {
-        fontSize: 12,
-        color: '#FF6B00',
+        fontFamily: FONTS.sans,
+        fontSize: theme.typography.caption.fontSize! + 1,
+        color: theme.colors.primary,
         textAlign: 'center',
     },
     networkInfo: {
@@ -146,23 +151,25 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         marginBottom: theme.spacing.s,
     },
     networkLabel: {
-        fontSize: 11,
+        fontFamily: FONTS.sans,
+        fontSize: theme.typography.caption.fontSize,
         color: theme.colors.textMuted,
         marginRight: theme.spacing.xs,
     },
     networkValue: {
-        fontSize: 10,
-        fontWeight: '700',
+        fontFamily: FONTS.sansBold,
+        fontSize: SIZES.badgeFontSize,
         letterSpacing: 2,
         textTransform: 'uppercase',
         color: theme.colors.textMuted,
         backgroundColor: theme.colors.surfaceAlt,
-        paddingVertical: 5,
-        paddingHorizontal: 12,
+        paddingVertical: theme.spacing.xs + 1,
+        paddingHorizontal: theme.spacing.m - 4,
         borderRadius: theme.borderRadius.full,
     },
     warning: {
-        fontSize: 11,
+        fontFamily: FONTS.sans,
+        fontSize: theme.typography.caption.fontSize,
         color: theme.colors.textMuted,
         textAlign: 'center',
         marginBottom: theme.spacing.m,
@@ -179,13 +186,14 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         marginTop: theme.spacing.m,
     },
     shareText: {
-        fontSize: 14,
+        fontFamily: FONTS.sansBold,
+        fontSize: theme.typography.body.fontSize,
         color: theme.colors.text,
         marginLeft: theme.spacing.xs,
-        fontWeight: '600',
     },
     errorText: {
-        fontSize: 14,
+        fontFamily: FONTS.sans,
+        fontSize: theme.typography.body.fontSize,
         color: theme.colors.danger,
     },
 });

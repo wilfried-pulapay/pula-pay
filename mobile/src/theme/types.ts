@@ -28,13 +28,35 @@ export type ColorPalette = {
   // Feedback
   success: string;
   successLight: string;
+  successText: string;   // text on successLight backgrounds
   danger: string;
   dangerLight: string;
   warning: string;
   warningLight: string;
+  warningText: string;   // text on warningLight backgrounds
 
   // Light variants
   primaryLight: string;
+  primaryBorder: string;  // rgba(255,107,0,0.25) — border tint for primary-accented boxes
+
+  // Accent
+  violet: string;
+  violetLight: string;
+  stone: string;
+
+  // Hero sections — intentionally always dark regardless of app theme
+  heroBackground: string;   // #0D0D0D — base of hero gradient
+  heroBackground2: string;  // #111111 — end of hero gradient
+  onHero: string;           // #FFFFFF — text/icons on hero
+  onHeroMuted: string;      // rgba(255,255,255,0.30) — muted text on hero
+  onHeroSubtle: string;     // rgba(255,255,255,0.50) — subtle icons on hero
+  heroBorder: string;       // rgba(255,255,255,0.08) — borders on hero
+  heroSurface: string;      // rgba(255,255,255,0.07) — button bg on hero
+  overlaySubtle: string;    // rgba(255,255,255,0.04) — very subtle card bg on dark
+
+  // UI controls
+  tabBarBg: string;   // tab bar background (theme-aware)
+  toggleOff: string;  // toggle track when inactive
 };
 
 export type Spacing = {

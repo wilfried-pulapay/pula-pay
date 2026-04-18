@@ -1,5 +1,7 @@
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View, StyleProp, ViewStyle, TextStyle } from "react-native";
+import { Animated, Pressable, Text, StyleSheet, ActivityIndicator, View, StyleProp, ViewStyle, TextStyle } from "react-native";
+import { useRef } from "react";
 import { useStyles } from "@/src/hooks/use-styles";
+import { FONTS } from "@/src/constants/theme";
 import type { Theme } from "@/src/theme/types";
 
 type Variant = "primary" | "secondary" | "outline" | "danger";
@@ -32,27 +34,39 @@ export default function Button({
 }: Props) {
     const isDisabled = disabled || loading;
     const styles = useStyles((theme: Theme) => getStyles(theme, variant, size, isDisabled, fullWidth));
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const handlePressIn = () => {
+        if (isDisabled) return;
+        Animated.spring(scale, { toValue: 0.95, useNativeDriver: true, speed: 40, bounciness: 0 }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+    };
 
     return (
-        <TouchableOpacity
-            style={[styles.button, style]}
+        <Pressable
             onPress={onPress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
             disabled={isDisabled}
-            activeOpacity={isDisabled ? 1 : 0.75}
             accessibilityRole="button"
             accessibilityState={{ disabled: isDisabled, busy: loading }}
         >
-            {loading ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator color={styles.text.color} size="small" />
-                    <Text style={[styles.text, { marginLeft: 8 }, textStyle]}>
-                        {loadingText ?? "Chargement..."}
-                    </Text>
-                </View>
-            ) : (
-                <Text style={[styles.text, textStyle]}>{title}</Text>
-            )}
-        </TouchableOpacity>
+            <Animated.View style={[styles.button, { transform: [{ scale }] }, style]}>
+                {loading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator color={styles.text.color} size="small" />
+                        <Text style={[styles.text, { marginLeft: 8 }, textStyle]}>
+                            {loadingText ?? "Chargement..."}
+                        </Text>
+                    </View>
+                ) : (
+                    <Text style={[styles.text, textStyle]}>{title}</Text>
+                )}
+            </Animated.View>
+        </Pressable>
     );
 }
 
@@ -72,7 +86,7 @@ const getStyles = (theme: Theme, variant: Variant, size: Size, disabled: boolean
         secondary: {
             bg: theme.colors.ink,
             border: theme.colors.ink,
-            text: '#FFFFFF',
+            text: theme.colors.onPrimary,
         },
         outline: {
             bg: 'transparent',
@@ -109,8 +123,8 @@ const getStyles = (theme: Theme, variant: Variant, size: Size, disabled: boolean
             justifyContent: 'center',
         },
         text: {
+            fontFamily: FONTS.sansBold,
             fontSize: sizing.fontSize,
-            fontWeight: '600',
             color: disabled ? theme.colors.textMuted : currentVariant.text,
         }
     });

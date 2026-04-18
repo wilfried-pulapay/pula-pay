@@ -4,7 +4,7 @@ import { useAuth } from "../../lib/auth";
 import { useTheme } from "@/src/theme";
 import LoadingSpinner from "@/src/components/ui/loading-spinner";
 import BrandHeader from "@/src/components/brand-header";
-import { House, Wallet, History, Settings } from "lucide-react-native";
+import TabBar from "@/src/components/ui/tab-bar";
 
 export default function MainLayout() {
     const { status } = useAuth();
@@ -20,42 +20,19 @@ export default function MainLayout() {
 
     return (
         <Tabs
+            tabBar={(props) => <TabBar {...props} />}
             screenOptions={{
                 headerShown: true,
                 header: () => <BrandHeader />,
-                tabBarActiveTintColor: theme.colors.primary,
-                tabBarInactiveTintColor: theme.colors.textMuted,
-                tabBarStyle: {
-                    backgroundColor: theme.colors.surface,
-                    borderTopWidth: 1,
-                    borderTopColor: theme.colors.border,
+                headerStyle: {
+                    backgroundColor: theme.colors.heroBackground,
                 },
-                tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
+                headerShadowVisible: false,
             }}>
-            <Tabs.Screen name="dashboard" options={{
-                title: "Home",
-                tabBarIcon: ({ color, size }) => (
-                    <House color={color} size={size} />
-                )
-            }} />
-            <Tabs.Screen name="wallet" options={{
-                title: "Wallet",
-                tabBarIcon: ({ color, size }) => (
-                    <Wallet color={color} size={size} />
-                )
-            }} />
-            <Tabs.Screen name="history" options={{
-                title: "History",
-                tabBarIcon: ({ color, size }) => (
-                    <History color={color} size={size} />
-                )
-            }} />
-            <Tabs.Screen name="profile" options={{
-                title: "Profil",
-                tabBarIcon: ({ color, size }) => (
-                    <Settings color={color} size={size} />
-                )
-            }} />
+            <Tabs.Screen name="dashboard" options={{ title: "Accueil" }} />
+            <Tabs.Screen name="history"   options={{ title: "Activité" }} />
+            <Tabs.Screen name="wallet"    options={{ title: "Wallet" }} />
+            <Tabs.Screen name="profile"   options={{ title: "Profil" }} />
         </Tabs>
     );
 };

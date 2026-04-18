@@ -46,6 +46,9 @@ export function formatAmount(
     currency: string,
     locale: string = 'en-GB'
 ): string {
+    if (!currency) {
+        return Number(amount || 0).toFixed(2);
+    }
     const decimals = currency === 'XOF' ? 0 : 2;
     return new Intl.NumberFormat(locale, {
         style: 'currency',

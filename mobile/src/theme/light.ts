@@ -31,13 +31,35 @@ const lightPalette: ColorPalette = {
     // Semantic
     success:      '#1F8A70',
     successLight: '#E8F5F1',
+    successText:  '#166357',
     danger:       '#E53333',
     dangerLight:  '#FFF0F0',
     warning:      '#F5A623',
     warningLight: '#FFFBF0',
+    warningText:  '#8B5E00',
 
     // Legacy
-    primaryLight: 'rgba(255,107,0,0.10)',
+    primaryLight:  'rgba(255,107,0,0.10)',
+    primaryBorder: 'rgba(255,107,0,0.25)',
+
+    // Accent
+    violet:       '#5B2EFF',
+    violetLight:  '#EDEAFF',
+    stone:        '#6B6B6B',
+
+    // Hero sections (always dark regardless of app theme — intentional design)
+    heroBackground:  '#0D0D0D',
+    heroBackground2: '#111111',
+    onHero:          '#FFFFFF',
+    onHeroMuted:     'rgba(255,255,255,0.30)',
+    onHeroSubtle:    'rgba(255,255,255,0.50)',
+    heroBorder:      'rgba(255,255,255,0.08)',
+    heroSurface:     'rgba(255,255,255,0.07)',
+    overlaySubtle:   'rgba(255,255,255,0.04)',
+
+    // UI controls
+    tabBarBg:   'rgba(255,255,255,0.96)',
+    toggleOff:  '#D4D4CE',
 };
 
 const light: Theme = {
