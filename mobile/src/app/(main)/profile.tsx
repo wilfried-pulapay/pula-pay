@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { useRef } from "react";
-import { LogOut, Moon, Sun, ChevronRight, Shield, HelpCircle, FileText } from "lucide-react-native";
+import { router } from "expo-router";
+import { LogOut, Moon, Sun, ChevronRight, Shield, HelpCircle, FileText, Smartphone } from "lucide-react-native";
 import Svg, { Defs, RadialGradient, Stop, Ellipse } from "react-native-svg";
 
 import { logout, useAuth } from "../../lib/auth";
@@ -121,10 +122,20 @@ export default function Profile() {
                     <View style={s.userInfo}>
                         <Text style={s.userName}>{name}</Text>
                         {phone ? <Text style={s.userPhone}>{phone}</Text> : null}
-                        <View style={s.verifiedBadge}>
-                            <View style={s.verifiedDot} />
-                            <Text style={s.verifiedText}>Vérifié</Text>
-                        </View>
+                        {user?.phoneNumberVerified ? (
+                            <View style={s.verifiedBadge}>
+                                <View style={s.verifiedDot} />
+                                <Text style={s.verifiedText}>Vérifié</Text>
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                style={s.unverifiedBadge}
+                                onPress={() => router.push("/(main)/verify-phone")}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={s.unverifiedText}>Vérifier le téléphone →</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             </View>
@@ -172,6 +183,27 @@ export default function Profile() {
                         </View>
                         <ThemeToggle />
                     </View>
+
+                    <View style={s.divider} />
+
+                    <View style={s.divider} />
+
+                    <TouchableOpacity
+                        style={s.menuItem}
+                        onPress={() => router.push("/(main)/verify-phone")}
+                        activeOpacity={0.7}
+                    >
+                        <View style={s.menuIcon}>
+                            <Smartphone size={SIZES.iconSm} color={theme.colors.text} />
+                        </View>
+                        <View style={s.menuContent}>
+                            <Text style={s.menuLabel}>Téléphone</Text>
+                            <Text style={s.menuDesc}>
+                                {user?.phoneNumberVerified ? user.phoneNumber || "Vérifié" : "Non vérifié – Appuyer pour vérifier"}
+                            </Text>
+                        </View>
+                        <ChevronRight size={SIZES.iconSm} color={theme.colors.stone} />
+                    </TouchableOpacity>
 
                     <View style={s.divider} />
 
@@ -305,6 +337,19 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         fontFamily: FONTS.sansBold,
         fontSize: SIZES.badgeFontSize,
         color: theme.colors.success,
+    },
+    unverifiedBadge: {
+        alignSelf: "flex-start",
+        borderRadius: theme.borderRadius.full,
+        paddingVertical: theme.spacing.xs - 1,
+        paddingHorizontal: theme.spacing.s + 2,
+        marginTop: theme.spacing.xs,
+        backgroundColor: theme.colors.dangerLight,
+    },
+    unverifiedText: {
+        fontFamily: FONTS.sansBold,
+        fontSize: SIZES.badgeFontSize,
+        color: theme.colors.danger,
     },
     // Body
     body: {

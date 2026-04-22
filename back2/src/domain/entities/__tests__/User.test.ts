@@ -8,7 +8,7 @@ describe('User Entity', () => {
       const user = new User(props);
 
       expect(user.id).toBe(props.id);
-      expect(user.phone).toBe(props.phone);
+      expect(user.phoneNumber).toBe(props.phoneNumber);
       expect(user.email).toBe(props.email);
       expect(user.name).toBe(props.name);
       expect(user.kycLevel).toBe(props.kycLevel);

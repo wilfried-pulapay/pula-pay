@@ -3,7 +3,7 @@ import { UserProps, User } from '@domain/entities/User';
 
 export const createUserProps = (overrides: Partial<UserProps> = {}): UserProps => ({
   id: 'user-test-id-001',
-  phone: '+22501234567',
+  phoneNumber: '+22501234567',
   email: 'test@example.com',
   name: null,
   kycLevel: 'BASIC' as KycLevel,
@@ -25,7 +25,7 @@ export const userFixtures = {
   noKyc: (): User =>
     createUser({
       id: 'user-no-kyc',
-      phone: '+22500000001',
+      phoneNumber: '+22500000001',
       kycLevel: 'NONE',
     }),
 
@@ -33,7 +33,7 @@ export const userFixtures = {
   basicKyc: (): User =>
     createUser({
       id: 'user-basic-kyc',
-      phone: '+22500000002',
+      phoneNumber: '+22500000002',
       kycLevel: 'BASIC',
     }),
 
@@ -41,7 +41,7 @@ export const userFixtures = {
   verifiedKyc: (): User =>
     createUser({
       id: 'user-verified-kyc',
-      phone: '+22500000003',
+      phoneNumber: '+22500000003',
       kycLevel: 'VERIFIED',
       kycData: { documentType: 'ID_CARD', documentNumber: 'ID123456' },
     }),
@@ -50,7 +50,7 @@ export const userFixtures = {
   enhancedKyc: (): User =>
     createUser({
       id: 'user-enhanced-kyc',
-      phone: '+22500000004',
+      phoneNumber: '+22500000004',
       kycLevel: 'ENHANCED',
       kycData: {
         documentType: 'ID_CARD',
@@ -63,7 +63,7 @@ export const userFixtures = {
   xofCurrency: (): User =>
     createUser({
       id: 'user-xof',
-      phone: '+22500000007',
+      phoneNumber: '+22500000007',
       displayCurrency: 'XOF',
       locale: 'fr-CI',
     }),

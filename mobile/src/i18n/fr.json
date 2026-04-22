@@ -170,6 +170,31 @@
         "usdcInfo": "Votre portefeuille accepte uniquement les tokens USDC. Assurez-vous d'envoyer sur le bon réseau pour éviter toute perte de fonds.",
         "noAddress": "Adresse non disponible"
     },
+    "verifyEmail": {
+        "title": "Vérifiez votre email",
+        "subtitle": "Entrez le code envoyé à {{email}}",
+        "placeholder": "000000",
+        "button": "Vérifier",
+        "resend": "Renvoyer le code",
+        "success": "Email vérifié !",
+        "wrongEmail": "Mauvais email ? Se déconnecter"
+    },
+    "verifyPhone": {
+        "title": "Ajouter un numéro",
+        "step2title": "Entrez le code",
+        "subtitle": "Entrez votre numéro pour recevoir un code SMS",
+        "onboardingSubtitle": "Ajoutez un numéro pour sécuriser votre compte",
+        "step2subtitle": "Code envoyé au {{phone}}",
+        "sendCode": "Envoyer le code",
+        "button": "Vérifier",
+        "resend": "Renvoyer",
+        "changeNumber": "Changer de numéro",
+        "skipForNow": "Passer pour l'instant",
+        "success": "Téléphone vérifié !",
+        "successTitle": "Téléphone vérifié !",
+        "successSubtitle": "Votre numéro a bien été ajouté à votre compte.",
+        "continueButton": "Continuer"
+    },
     "profile": {
         "displayCurrency": "Devise d'affichage",
         "selectCurrency": "Choisir la devise",

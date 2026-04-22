@@ -71,6 +71,7 @@ export type User = {
     phoneNumber: string;
     name?: string;
     email?: string;
+    emailVerified?: boolean;
     phoneNumberVerified?: boolean;
     displayCurrency: DisplayCurrency;
     kycLevel?: string;

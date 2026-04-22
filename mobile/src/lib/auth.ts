@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
+import { emailOTPClient, phoneNumberClient } from "better-auth/client/plugins";
 import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "../constants/config";
 import type { User } from "../store/types";
@@ -12,6 +13,8 @@ export const authClient = createAuthClient({
             storagePrefix: "pulapay",
             storage: SecureStore,
         }),
+        emailOTPClient(),
+        phoneNumberClient(),
     ],
 });
 
@@ -25,6 +28,7 @@ export function mapSessionUser(sessionUser: Record<string, any> | null | undefin
         id: sessionUser.id,
         name: sessionUser.name,
         email: sessionUser.email,
+        emailVerified: sessionUser.emailVerified ?? false,
         phoneNumber: sessionUser.phoneNumber ?? sessionUser.phone ?? "",
         phoneNumberVerified: sessionUser.phoneNumberVerified ?? sessionUser.phoneVerified,
         displayCurrency: sessionUser.displayCurrency ?? "EUR",

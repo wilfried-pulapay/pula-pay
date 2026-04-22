@@ -49,6 +49,18 @@ const envSchema = z.object({
   COINBASE_CDP_BASE_URL: z.string().default('https://api.developer.coinbase.com'),
   COINBASE_CDP_DEFAULT_COUNTRY: z.string().default('US'),
 
+  // Twilio (SMS OTP)
+  TWILIO_ACCOUNT_SID: z.string(),
+  TWILIO_AUTH_TOKEN: z.string(),
+  TWILIO_PHONE_NUMBER: z.string(),
+
+  // SMTP (Email OTP)
+  SMTP_HOST: z.string(),
+  SMTP_PORT: z.string().default('587').transform(Number),
+  SMTP_USER: z.string(),
+  SMTP_PASS: z.string(),
+  SMTP_FROM: z.string().default('noreply@pulapay.com'),
+
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.string().default('60000').transform(Number),
   RATE_LIMIT_MAX_REQUESTS: z.string().default('100').transform(Number),
@@ -130,6 +142,20 @@ export const config = {
     apiKeyPrivateKey: env.COINBASE_CDP_API_KEY_PRIVATE_KEY,
     baseUrl: env.COINBASE_CDP_BASE_URL,
     defaultCountry: env.COINBASE_CDP_DEFAULT_COUNTRY,
+  },
+
+  twilio: {
+    accountSid: env.TWILIO_ACCOUNT_SID,
+    authToken: env.TWILIO_AUTH_TOKEN,
+    phoneNumber: env.TWILIO_PHONE_NUMBER,
+  },
+
+  smtp: {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.SMTP_FROM,
   },
 
   rateLimit: {

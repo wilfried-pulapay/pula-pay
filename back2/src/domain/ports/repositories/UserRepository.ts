@@ -1,7 +1,7 @@
 import { User } from '../../entities/User';
 
 export interface CreateUserParams {
-  phone: string;
+  phoneNumber: string;
   email?: string;
   name?: string;
 }

@@ -48,6 +48,7 @@ pula-pay/
 | Animations      | React Native Reanimated             |
 | Secure Storage  | expo-secure-store                   |
 | QR Codes        | react-native-qrcode-svg             |
+| Circle SDK      | @circle-fin/w3s-pw-react-native-sdk |
 
 ## Architecture
 
@@ -62,8 +63,8 @@ back2/src/
 │   ├── ports/                 # Repository & Provider interfaces
 │   └── errors/                # Domain exceptions
 ├── application/               # Use cases (Command/Query pattern)
-│   ├── commands/              # 8 state-changing handlers
-│   ├── queries/               # 8 read-only handlers
+│   ├── commands/              # 9 state-changing handlers
+│   ├── queries/               # 9 read-only handlers
 │   └── services/              # CurrencyConversionService
 └── infrastructure/            # External integrations
     ├── adapters/              # Circle, Coinbase CDP, CoinGecko
@@ -82,7 +83,7 @@ mobile/src/
 │   └── (main)/               # Dashboard, Wallet, History, Profile
 │       └── wallet/            # Deposit, Withdraw, Transfer, Receive
 ├── api/                       # Axios client + endpoint modules
-├── store/                     # Zustand stores (auth, wallet, toast)
+├── store/                     # Zustand stores (wallet, toast, ui)
 ├── components/                # Reusable UI components
 ├── hooks/                     # Custom hooks (useBalance, useDeposit, etc.)
 ├── theme/                     # Light/dark theme system
@@ -168,14 +169,17 @@ mobile/src/
 |--------|------------------------------|----------------------------------------------------------|
 | POST   | /wallet                      | Initiate wallet setup — returns Circle challenge         |
 | POST   | /wallet/confirm-setup        | Confirm wallet after PIN resolved on mobile              |
-| GET    | /wallet/me                   | Get wallet info                                          |
-| GET    | /wallet/address              | Get wallet address                                       |
+| GET    | /wallet/address              | Get wallet address + status                             |
 | GET    | /wallet/balance              | Get balance                                              |
+| GET    | /wallet/circle-wallets       | Fetch wallet directly from Circle (recovery)            |
 | POST   | /wallet/sync-status          | Sync wallet status with Circle                           |
 | POST   | /wallet/deposit              | Initiate Coinbase CDP onramp                             |
 | POST   | /wallet/withdraw             | Initiate Coinbase CDP offramp                            |
-| POST   | /wallet/transferable         | Initiate P2P transfer — returns Circle challenge         |
-| GET    | /wallet/resolve-recipient    | Resolve recipient by phone                               |
+| GET    | /wallet/onramp-quote         | Fee preview for deposit                                  |
+| GET    | /wallet/offramp-quote        | Fee preview for withdrawal                               |
+| POST   | /wallet/transfer             | P2P transfer via Circle on-chain                        |
+| POST   | /wallet/transferable         | Simple P2P transfer (no Circle API)                     |
+| GET    | /wallet/resolve-recipient    | Resolve recipient by phone or address                   |
 | GET    | /wallet/transactions         | Transaction history                                      |
 | GET    | /wallet/transactions/:txId   | Transaction details                                      |
 
@@ -209,6 +213,7 @@ Core tables managed by Prisma:
 
 **Docker Compose** provides:
 - PostgreSQL 16 with health checks and persistent volumes
+- Redis 7 (AOF persistence, 256 MB — BullMQ queues, rate limiting, exchange rate cache)
 
 **Supported Blockchains:**
 - Base Sepolia (testnet, default)
@@ -217,7 +222,7 @@ Core tables managed by Prisma:
 ## Key Design Decisions
 
 - **User-Controlled Wallets** — Users hold their own private keys via PIN/biometrics. Every signing operation goes through a Circle challenge resolved on mobile.
-- **Circle Challenge Flow** — Backend initiates operations (wallet setup, transfer) and returns a `challengeId`. Mobile resolves the challenge via Circle Web SDK (WebView) before the operation executes.
+- **Circle Challenge Flow** — Backend initiates operations (wallet setup, transfer) and returns a `challengeId`. Mobile resolves the challenge via the native `@circle-fin/w3s-pw-react-native-sdk` before the operation executes.
 - **Two-step wallet creation** — `POST /wallet` returns a challenge; `POST /wallet/confirm-setup` completes it after PIN setup. Prevents orphan wallet records.
 - **Idempotency** — Every command uses idempotency keys to prevent duplicate processing
 - **Atomic transactions** — Wallet balance updates + ledger entries in a single Prisma transaction

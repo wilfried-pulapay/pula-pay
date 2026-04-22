@@ -170,6 +170,31 @@
         "usdcInfo": "Your wallet only accepts USDC tokens. Make sure to send on the correct network to avoid loss of funds.",
         "noAddress": "Address not available"
     },
+    "verifyEmail": {
+        "title": "Verify your email",
+        "subtitle": "Enter the code sent to {{email}}",
+        "placeholder": "000000",
+        "button": "Verify",
+        "resend": "Resend code",
+        "success": "Email verified!",
+        "wrongEmail": "Wrong email? Sign out"
+    },
+    "verifyPhone": {
+        "title": "Add phone number",
+        "step2title": "Enter the code",
+        "subtitle": "Enter your number to receive an SMS code",
+        "onboardingSubtitle": "Add a phone number for extra security",
+        "step2subtitle": "Code sent to {{phone}}",
+        "sendCode": "Send code",
+        "button": "Verify",
+        "resend": "Resend",
+        "changeNumber": "Change number",
+        "skipForNow": "Skip for now",
+        "success": "Phone verified!",
+        "successTitle": "Phone verified!",
+        "successSubtitle": "Your phone number has been added to your account.",
+        "continueButton": "Continue"
+    },
     "profile": {
         "displayCurrency": "Display currency",
         "selectCurrency": "Select currency",

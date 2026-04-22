@@ -31,7 +31,7 @@ export class PrismaWalletRepository implements WalletRepository {
   async findByUserPhone(phone: string): Promise<Wallet | null> {
     const wallet = await this.prisma.wallet.findFirst({
       where: {
-        user: { phone },
+        user: { phoneNumber: phone },
       },
     });
     return wallet ? this.toDomain(wallet) : null;

@@ -14,6 +14,7 @@ Cross-platform fintech mobile app for USDC wallet management, mobile money on/of
 | i18n           | i18next 25 + react-i18next (EN, FR)            |
 | Icons          | Lucide React Native 0.556                      |
 | Phone Input    | react-native-international-phone-number 0.11   |
+| Circle SDK     | @circle-fin/w3s-pw-react-native-sdk (native PIN SDK) |
 | QR Code        | react-native-qrcode-svg 6.3                    |
 | Animations     | React Native Reanimated 4.1                    |
 | Secure Storage | expo-secure-store 15 (Keychain / Keystore)     |
@@ -47,7 +48,8 @@ mobile/
 │   │           ├── transfert.tsx# P2P transfer
 │   │           └── receive.tsx # QR code + address
 │   ├── lib/                    # Core library modules
-│   │   └── auth.ts             # Better Auth client, useAuth(), getToken(), logout()
+│   │   ├── auth.ts             # Better Auth client, useAuth(), getToken(), logout()
+│   │   └── circle.ts           # Circle native SDK wrapper (executeCircleChallenge)
 │   ├── api/                    # HTTP layer
 │   │   ├── client.ts           # Axios instance + interceptors (Bearer token, logging, 401)
 │   │   ├── wallet.ts           # Wallet, balance, transaction endpoints
@@ -79,7 +81,6 @@ mobile/
 │   │   ├── brand-header.tsx    # App header
 │   │   ├── screen.tsx          # SafeArea + KeyboardAvoiding wrapper
 │   │   ├── auth-form-layout.tsx# Shared auth form container (login + register)
-│   │   ├── circle-challenge-webview.tsx # Circle SDK in WebView modal (PIN / wallet setup)
 │   │   └── error-boundary.tsx  # Catch render errors with retry
 │   ├── hooks/                  # Custom React hooks
 │   │   ├── use-balance.ts      # Fetch balance
@@ -191,7 +192,7 @@ State: {
 }
 
 Methods:
-  fetchWallet()                           // GET /wallet/me
+  fetchWallet()                           // GET /wallet/address (constructs WalletDTO)
   fetchBalance(currency?)                 // GET /wallet/balance?currency=
   fetchTransactions()                     // GET /wallet/transactions
   fetchExchangeRates()                    // GET /exchange-rates
@@ -266,8 +267,8 @@ POST /api/auth/sign-out                               → clears session
 ```
 POST   /wallet                { blockchain? }         → WalletSetupChallenge { challengeId, userToken, encryptionKey, appId }
 POST   /wallet/confirm-setup  { userToken, blockchain? } → WalletSetupConfirm { walletId, address, blockchain, status }
-GET    /wallet/me                                     → WalletDTO
 GET    /wallet/address                                → { walletId, address, blockchain, status }
+GET    /wallet/circle-wallets                         → CircleWalletDetails (recovery fallback)
 POST   /wallet/sync-status                            → { walletId, previousStatus, currentStatus, wasUpdated }
 GET    /wallet/balance        ?currency=EUR           → BalanceDTO
 GET    /exchange-rates        ?currencies=EUR,XOF     → ExchangeRateDTO[]
@@ -315,9 +316,9 @@ WalletSetupChallenge = { challengeId, userToken, encryptionKey, appId }
 WalletSetupConfirm   = { walletId, address, blockchain, status }
 
 // Requests
-DepositRequest  = { amount, currency, provider, msisdn? }
-WithdrawRequest = { amount, currency, provider, msisdn? }
-TransferRequest = { receiverId?, receiverPhone?, receiverAddress?, amount, currency, description? }
+DepositRequest  = { amount, currency, country?, paymentMethod? }
+WithdrawRequest = { amount, targetCurrency, country?, paymentMethod? }
+TransferRequest = { recipientPhone?, recipientAddress?, amount, currency, description? }
 
 // Transfer challenge response
 TransferResponse = {
@@ -358,7 +359,7 @@ TransferResponse = {
 **Flow:**
 1. `authClient.signUp.email()` → session auto-set
 2. `POST /wallet` → returns `WalletSetupChallenge` (`challengeId`, `userToken`, `encryptionKey`, `appId`)
-3. `CircleChallengeWebView` opens — user sets their PIN via Circle Web SDK
+3. `executeCircleChallenge()` runs — Circle native SDK presents PIN setup UI
 4. On PIN success: `POST /wallet/confirm-setup` → wallet activated
 5. Auth layout guard redirects to dashboard
 
@@ -403,7 +404,7 @@ TransferResponse = {
 **Flow:**
 1. Sync wallet status → validate ACTIVE
 2. `POST /wallet/transferable` → returns `TransferResponse` (challenge data)
-3. `CircleChallengeWebView` opens — user confirms transfer via PIN
+3. `executeCircleChallenge()` runs — Circle native SDK presents PIN confirmation UI
 4. On PIN success: display transaction confirmation (amount, recipient, tx ID)
 5. "View transactions" link
 
@@ -615,8 +616,9 @@ Use your local network IP for device testing (not `localhost`).
 
 ## Key Patterns
 
-- **Circle Challenge Flow** — Wallet setup and transfers are two-step operations: backend initiates and returns a `challengeId`, mobile resolves via `CircleChallengeWebView` (Circle Web SDK in a Modal WebView). Results communicated via `postMessage`.
-- **User-Controlled wallets** — Users hold their own private keys via PIN. The Circle Web SDK (`@circle-fin/w3s-pw-web-sdk`) is loaded from CDN in a WebView since no official React Native SDK exists.
+- **Circle Challenge Flow** — Wallet setup and transfers are two-step operations: backend initiates and returns a `challengeId`, mobile resolves via `executeCircleChallenge()` in `src/lib/circle.ts` using the native Circle SDK. The SDK is initialized lazily with the `appId` returned by the backend.
+- **User-Controlled wallets** — Users hold their own private keys secured by a PIN. The official `@circle-fin/w3s-pw-react-native-sdk` is used directly (no WebView wrapper needed).
+- **Wallet recovery** — On `WALLET_NOT_FOUND`, `fetchBalance()` checks `GET /wallet/circle-wallets`; if a LIVE wallet exists in Circle, it auto-recovers by calling `confirm-setup` before showing the create-wallet prompt.
 - **Idempotency** — All transaction requests include `x-idempotency-key` header to prevent duplicates on retry
 - **Better Auth session** — Session managed by `expoClient` plugin; token stored in SecureStore and sent as `Authorization: Bearer` on every API request
 - **Wallet sync before operations** — Every deposit/withdraw/transfer syncs wallet status with Circle first

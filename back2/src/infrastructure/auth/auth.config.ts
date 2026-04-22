@@ -1,10 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { expo } from '@better-auth/expo';
-import { bearer } from 'better-auth/plugins';
+import { bearer, emailOTP, phoneNumber } from 'better-auth/plugins';
 import { prisma } from '../persistence/prisma/client';
 import { config } from '../../shared/config';
 import { logger } from '../../shared/utils/logger';
+import { sendEmailOtp, sendSmsOtp } from '../notifications/notification.service';
 
 
 export const auth = betterAuth({
@@ -78,7 +79,25 @@ export const auth = betterAuth({
     },
   },
 
-  plugins: [expo(), bearer()],
+  plugins: [
+    expo(),
+    bearer(),
+    emailOTP({
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        void sendEmailOtp(email, otp, type);
+      },
+      sendVerificationOnSignUp: true,
+      otpLength: 6,
+      expiresIn: 300,
+    }),
+    phoneNumber({
+      sendOTP: async ({ phoneNumber: phone, code }) => {
+        await sendSmsOtp(phone, code);
+      },
+      otpLength: 6,
+      expiresIn: 300,
+    }),
+  ],
 
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days

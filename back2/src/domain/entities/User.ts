@@ -2,7 +2,7 @@ import { KycLevel, Currency } from '@prisma/client';
 
 export interface UserProps {
   id: string;
-  phone: string | null;
+  phoneNumber: string | null;
   email: string | null;
   name: string | null;
   kycLevel: KycLevel;
@@ -24,8 +24,8 @@ export class User {
   get id(): string {
     return this.props.id;
   }
-  get phone(): string | null {
-    return this.props.phone;
+  get phoneNumber(): string | null {
+    return this.props.phoneNumber;
   }
   get email(): string | null {
     return this.props.email;
@@ -121,7 +121,7 @@ export class User {
   toJSON() {
     return {
       id: this.props.id,
-      phone: this.props.phone,
+      phoneNumber: this.props.phoneNumber,
       email: this.props.email,
       name: this.props.name,
       kycLevel: this.props.kycLevel,

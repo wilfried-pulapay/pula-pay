@@ -81,7 +81,7 @@ export class InMemoryUserRepository implements UserRepository {
 
   async findByPhone(phone: string): Promise<User | null> {
     for (const user of this.users.values()) {
-      if (user.phone === phone) {
+      if (user.phoneNumber === phone) {
         return user;
       }
     }
@@ -102,7 +102,7 @@ export class InMemoryUserRepository implements UserRepository {
     const user = createUser(
       createUserProps({
         id,
-        phone: params.phone,
+        phoneNumber: params.phoneNumber,
         email: params.email || null,
         name: params.name || null,
         kycLevel: 'NONE',

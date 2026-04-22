@@ -11,7 +11,7 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async findByPhone(phone: string): Promise<User | null> {
-    const user = await this.prisma.user.findUnique({ where: { phone } });
+    const user = await this.prisma.user.findUnique({ where: { phoneNumber: phone } });
     return user ? this.toDomain(user) : null;
   }
 
@@ -23,7 +23,7 @@ export class PrismaUserRepository implements UserRepository {
   async create(params: CreateUserParams): Promise<User> {
     const user = await this.prisma.user.create({
       data: {
-        phone: params.phone,
+        phoneNumber: params.phoneNumber,
         email: params.email,
         name: params.name,
       },
@@ -54,7 +54,7 @@ export class PrismaUserRepository implements UserRepository {
   private toDomain(prismaUser: PrismaUser): User {
     const props: UserProps = {
       id: prismaUser.id,
-      phone: prismaUser.phone,
+      phoneNumber: prismaUser.phoneNumber,
       email: prismaUser.email,
       name: prismaUser.name,
       kycLevel: prismaUser.kycLevel,

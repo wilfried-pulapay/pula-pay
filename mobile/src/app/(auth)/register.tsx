@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
-import { router } from "expo-router";
 import Input from "@/src/components/ui/Input";
 import AuthFormLayout, { getAuthFormStyles } from "@/src/components/auth-form-layout";
 import { useStyles } from "@/src/hooks/use-styles";
@@ -43,8 +42,7 @@ export default function Register() {
                 setError(signUpError.message ?? t("apiErrors.UNKNOWN_ERROR"));
                 return;
             }
-
-            router.replace("/(main)/dashboard");
+            // Layout guard handles redirect to verify-email (emailVerified = false after sign-up)
         } catch {
             setError(t("apiErrors.NETWORK_ERROR"));
         } finally {

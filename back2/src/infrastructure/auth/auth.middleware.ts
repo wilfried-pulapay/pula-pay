@@ -8,7 +8,7 @@ declare global {
     interface Request {
       user?: {
         id: string;
-        phone?: string;
+        phoneNumber?: string;
         kycLevel?: string;
         displayCurrency?: string;
       };
@@ -41,7 +41,7 @@ export async function authMiddleware(
 
     req.user = {
       id: session.user.id,
-      phone: (session.user as any).phone,
+      phoneNumber: (session.user as any).phoneNumber,
       kycLevel: (session.user as any).kycLevel,
       displayCurrency: (session.user as any).displayCurrency,
     };

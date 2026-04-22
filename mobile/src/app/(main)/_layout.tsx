@@ -7,7 +7,7 @@ import BrandHeader from "@/src/components/brand-header";
 import TabBar from "@/src/components/ui/tab-bar";
 
 export default function MainLayout() {
-    const { status } = useAuth();
+    const { status, user } = useAuth();
     const theme = useTheme();
 
     if (status === "loading") {
@@ -16,6 +16,10 @@ export default function MainLayout() {
 
     if (status !== "authenticated") {
         return <Redirect href="/(auth)/login" />;
+    }
+
+    if (!user?.emailVerified) {
+        return <Redirect href="/(auth)/verify-email" />;
     }
 
     return (
@@ -33,6 +37,7 @@ export default function MainLayout() {
             <Tabs.Screen name="history"   options={{ title: "Activité" }} />
             <Tabs.Screen name="wallet"    options={{ title: "Wallet" }} />
             <Tabs.Screen name="profile"   options={{ title: "Profil" }} />
+            <Tabs.Screen name="verify-phone" options={{ href: null }} />
         </Tabs>
     );
 };
