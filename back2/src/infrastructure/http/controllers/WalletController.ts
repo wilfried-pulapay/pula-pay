@@ -211,6 +211,7 @@ export class WalletController {
         fiatCurrency: data.currency,
         country: data.country,
         paymentMethod: data.paymentMethod,
+        clientIp: req.ip,
       });
 
       res.status(202).json({
@@ -239,6 +240,7 @@ export class WalletController {
         fiatCurrency: data.targetCurrency,
         country: data.country,
         paymentMethod: data.paymentMethod,
+        clientIp: req.ip,
       });
 
       res.status(202).json({

@@ -48,6 +48,7 @@ const envSchema = z.object({
   COINBASE_CDP_API_KEY_PRIVATE_KEY: z.string().min(1),
   COINBASE_CDP_BASE_URL: z.string().default('https://api.developer.coinbase.com'),
   COINBASE_CDP_DEFAULT_COUNTRY: z.string().default('US'),
+  COINBASE_CDP_WEBHOOK_SECRET: z.string().optional(),
 
   // Twilio (SMS OTP)
   TWILIO_ACCOUNT_SID: z.string(),
@@ -142,6 +143,7 @@ export const config = {
     apiKeyPrivateKey: env.COINBASE_CDP_API_KEY_PRIVATE_KEY,
     baseUrl: env.COINBASE_CDP_BASE_URL,
     defaultCountry: env.COINBASE_CDP_DEFAULT_COUNTRY,
+    webhookSecret: env.COINBASE_CDP_WEBHOOK_SECRET,
   },
 
   twilio: {

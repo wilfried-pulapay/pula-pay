@@ -10,6 +10,8 @@ export interface InitiateDepositParams {
   blockchain?: string;
   country?: string;
   paymentMethod?: string;
+  partnerUserRef: string;
+  clientIp?: string;
 }
 
 export interface DepositResult {
@@ -37,6 +39,8 @@ export interface InitiatePayoutParams {
   paymentMethod?: string;
   cashoutCurrency?: Currency;
   redirectUrl?: string;
+  partnerUserRef: string;
+  clientIp?: string;
 }
 
 export interface PayoutResult {
@@ -61,5 +65,5 @@ export interface OnRampProvider {
   getDepositStatus(providerRef: string): Promise<DepositResult>;
   initiatePayout(params: InitiatePayoutParams): Promise<PayoutResult>;
   getPayoutStatus(providerRef: string): Promise<PayoutResult>;
-  validateWebhook(headers: Record<string, string>, body: unknown): boolean;
+  validateWebhook(headers: Record<string, string>, rawBody: string): boolean;
 }

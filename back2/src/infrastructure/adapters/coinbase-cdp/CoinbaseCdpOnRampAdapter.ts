@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { OnRampProvider as Provider } from '@prisma/client';
 import {
   OnRampProvider,
@@ -21,8 +22,6 @@ import {
   CoinbaseBuyQuoteResponse,
   CoinbaseSellQuoteResponse,
   CoinbaseTransactionsResponse,
-  CoinbaseTransactionStatus,
-  CoinbaseCdpWebhookPayload,
 } from './types';
 
 /**
@@ -31,6 +30,10 @@ import {
  * Uses a redirect-based flow: the backend generates a session token and
  * buy/sell quote, returns a Coinbase widget URL, and the mobile app opens
  * it in a WebView. Polling is handled by BullMQ workers.
+ *
+ * Key invariant: partnerUserRef = "pulapay_{internalTransactionId}" is embedded
+ * in the widget URL so Coinbase can link widget sessions to the Transaction
+ * Status API. The same value is stored as providerRef and used for polling.
  */
 export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
   readonly providerCode: Provider = 'COINBASE_CDP';
@@ -82,12 +85,13 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
 
   private async createSessionToken(
     walletAddress: string,
-    blockchain: string
+    blockchain: string,
+    clientIp?: string
   ): Promise<CoinbaseSessionTokenResponse> {
     const blockchainName = this.mapBlockchainName(blockchain);
     return this.request<CoinbaseSessionTokenResponse>('POST', '/onramp/v1/token', {
       addresses: [{ address: walletAddress, blockchains: [blockchainName] }],
-      assets: ['USDC'],
+      ...(clientIp ? { clientIp } : {}),
     });
   }
 
@@ -148,9 +152,10 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     const walletAddress = params.walletAddress;
     const blockchain = params.blockchain ?? 'BASE_SEPOLIA';
     const country = params.country ?? config.coinbase.defaultCountry;
+    const { partnerUserRef, clientIp } = params;
 
     // 1. Create session token
-    const session = await this.createSessionToken(walletAddress, blockchain);
+    const session = await this.createSessionToken(walletAddress, blockchain, clientIp);
 
     // 2. Get buy quote
     const quoteResponse = await this.request<CoinbaseBuyQuoteResponse>(
@@ -166,14 +171,17 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
       }
     );
 
-    // 3. Build the widget URL
-    const paymentUrl =
-      quoteResponse.onramp_url ??
-      `https://pay.coinbase.com/buy/select-asset?sessionToken=${session.token}`;
+    // 3. Build widget URL — partnerUserRef must be in the URL so Coinbase links
+    //    the session to the Transaction Status API
+    const paymentUrl = this.buildOnrampUrl(
+      quoteResponse.onramp_url ?? `https://pay.coinbase.com/buy/select-asset?sessionToken=${session.token}`,
+      partnerUserRef
+    );
 
     logger.info(
       {
         quoteId: quoteResponse.quote_id,
+        partnerUserRef,
         userId: params.userId,
         amount: params.amount,
         currency: params.currency,
@@ -183,7 +191,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     );
 
     return {
-      providerRef: quoteResponse.quote_id,
+      providerRef: partnerUserRef,
       status: 'pending',
       paymentUrl,
       quoteId: quoteResponse.quote_id,
@@ -195,31 +203,26 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     };
   }
 
-  async getDepositStatus(providerRef: string): Promise<DepositResult> {
-    const [userId, quoteId] = this.parseProviderRef(providerRef);
-    const partnerUserRef = `pulapay_${userId}`;
-
+  async getDepositStatus(partnerUserRef: string): Promise<DepositResult> {
     try {
       const response = await this.request<CoinbaseTransactionsResponse>(
         'GET',
-        `/onramp/v1/buy/user/${partnerUserRef}/transactions`
+        `/onramp/v1/buy/user/${encodeURIComponent(partnerUserRef)}/transactions?page_size=1`
       );
 
-      const tx = response.transactions?.find(
-        (t) => t.transaction_id === quoteId
-      );
-
+      const tx = response.transactions?.[0];
       if (tx) {
         return {
-          providerRef,
+          providerRef: partnerUserRef,
           status: this.mapCoinbaseStatus(tx.status),
+          purchaseAmount: tx.purchase_amount?.value,
         };
       }
     } catch (error) {
-      logger.warn({ error, providerRef }, 'Failed to get Coinbase deposit status');
+      logger.warn({ error, partnerUserRef }, 'Failed to get Coinbase deposit status');
     }
 
-    return { providerRef, status: 'pending' };
+    return { providerRef: partnerUserRef, status: 'pending' };
   }
 
   async initiatePayout(params: InitiatePayoutParams): Promise<PayoutResult> {
@@ -227,12 +230,13 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     const blockchain = params.blockchain ?? 'BASE_SEPOLIA';
     const country = params.country ?? config.coinbase.defaultCountry;
     const cashoutCurrency = params.cashoutCurrency ?? params.currency;
+    const { partnerUserRef, clientIp } = params;
+    const redirectUrl = params.redirectUrl ?? `${config.apiUrl}/onramp-complete`;
 
     // 1. Create session token
-    const session = await this.createSessionToken(walletAddress, blockchain);
+    const session = await this.createSessionToken(walletAddress, blockchain, clientIp);
 
     // 2. Get sell quote
-    const partnerUserId = `pulapay_${params.userId}`;
     const quoteResponse = await this.request<CoinbaseSellQuoteResponse>(
       'POST',
       '/onramp/v1/sell/quote',
@@ -243,19 +247,28 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
         paymentMethod: params.paymentMethod ?? 'ACH_BANK_ACCOUNT',
         country,
         sourceAddress: walletAddress,
-        redirectUrl: params.redirectUrl,
-        partnerUserId,
+        redirectUrl,
+        partnerUserId: partnerUserRef,
       }
     );
 
-    // 3. Build the widget URL
-    const paymentUrl =
-      quoteResponse.offramp_url ??
-      `https://pay.coinbase.com/v3/sell/input?sessionToken=${session.token}`;
+    // 3. Build one-click-sell URL with all required parameters
+    const fallbackParams = new URLSearchParams({
+      sessionToken: session.token,
+      partnerUserRef,
+      defaultAsset: 'USDC',
+      presetCryptoAmount: String(params.amount),
+      redirectUrl,
+    });
+    const paymentUrl = this.buildOfframpUrl(
+      quoteResponse.offramp_url ?? `https://pay.coinbase.com/v3/sell/input?${fallbackParams}`,
+      partnerUserRef
+    );
 
     logger.info(
       {
         quoteId: quoteResponse.quote_id,
+        partnerUserRef,
         userId: params.userId,
         amount: params.amount,
         cashoutCurrency,
@@ -265,7 +278,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     );
 
     return {
-      providerRef: quoteResponse.quote_id,
+      providerRef: partnerUserRef,
       status: 'pending',
       paymentUrl,
       quoteId: quoteResponse.quote_id,
@@ -276,36 +289,81 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     };
   }
 
-  async getPayoutStatus(providerRef: string): Promise<PayoutResult> {
-    const [userId, quoteId] = this.parseProviderRef(providerRef);
-    const partnerUserRef = `pulapay_${userId}`;
-
+  async getPayoutStatus(partnerUserRef: string): Promise<PayoutResult> {
     try {
       const response = await this.request<CoinbaseTransactionsResponse>(
         'GET',
-        `/onramp/v1/sell/user/${partnerUserRef}/transactions`
+        `/onramp/v1/sell/user/${encodeURIComponent(partnerUserRef)}/transactions?page_size=1`
       );
 
-      const tx = response.transactions?.find(
-        (t) => t.transaction_id === quoteId
-      );
-
+      const tx = response.transactions?.[0];
       if (tx) {
         return {
-          providerRef,
+          providerRef: partnerUserRef,
           status: this.mapCoinbaseStatus(tx.status),
         };
       }
     } catch (error) {
-      logger.warn({ error, providerRef }, 'Failed to get Coinbase payout status');
+      logger.warn({ error, partnerUserRef }, 'Failed to get Coinbase payout status');
     }
 
-    return { providerRef, status: 'pending' };
+    return { providerRef: partnerUserRef, status: 'pending' };
   }
 
-  validateWebhook(_headers: Record<string, string>, body: unknown): boolean {
-    const payload = body as CoinbaseCdpWebhookPayload;
-    return !!(payload?.event_type && payload?.transaction_id);
+  /**
+   * Verify Coinbase webhook authenticity using X-Hook0-Signature HMAC-SHA256.
+   * Header format: t={timestamp},h={headerNames},v1={hmac}
+   */
+  validateWebhook(headers: Record<string, string>, rawBody: string): boolean {
+    const secret = config.coinbase.webhookSecret;
+    if (!secret) {
+      // Fail open in dev when no secret is configured, but warn loudly
+      logger.warn('COINBASE_CDP_WEBHOOK_SECRET not set — skipping signature verification');
+      return true;
+    }
+
+    const signatureHeader = headers['x-hook0-signature'];
+    if (!signatureHeader) {
+      logger.warn('Coinbase webhook missing X-Hook0-Signature header');
+      return false;
+    }
+
+    try {
+      const elements = signatureHeader.split(',');
+      const timestamp = elements.find((e) => e.startsWith('t='))?.split('=')[1];
+      const headerNames = elements.find((e) => e.startsWith('h='))?.split('=')[1];
+      const providedSignature = elements.find((e) => e.startsWith('v1='))?.split('=')[1];
+
+      if (!timestamp || !headerNames || !providedSignature) {
+        logger.warn({ signatureHeader }, 'Malformed X-Hook0-Signature header');
+        return false;
+      }
+
+      // Replay attack prevention: reject webhooks older than 5 minutes
+      const ageMinutes = (Date.now() - parseInt(timestamp) * 1000) / 60_000;
+      if (ageMinutes > 5) {
+        logger.warn({ ageMinutes }, 'Coinbase webhook timestamp too old');
+        return false;
+      }
+
+      // Build signed payload: {timestamp}.{headerNames}.{headerValues}.{body}
+      const headerNameList = headerNames.split(' ');
+      const headerValues = headerNameList.map((name) => headers[name.toLowerCase()] ?? '').join('.');
+      const signedPayload = `${timestamp}.${headerNames}.${headerValues}.${rawBody}`;
+
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(signedPayload, 'utf8')
+        .digest('hex');
+
+      return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature, 'hex'),
+        Buffer.from(providedSignature, 'hex')
+      );
+    } catch (error) {
+      logger.error({ error }, 'Webhook signature verification error');
+      return false;
+    }
   }
 
   // ============================================
@@ -313,23 +371,12 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
   // ============================================
 
   private mapCoinbaseStatus(
-    status: CoinbaseTransactionStatus
+    status: string
   ): 'pending' | 'processing' | 'completed' | 'failed' {
     if (status.endsWith('_SUCCESS')) return 'completed';
     if (status.endsWith('_FAILED')) return 'failed';
-    if (status.endsWith('_IN_PROGRESS')) return 'processing';
+    if (status.endsWith('_IN_PROGRESS') || status.endsWith('_STARTED')) return 'processing';
     return 'pending';
-  }
-
-  private parseProviderRef(providerRef: string): [string, string] {
-    const separatorIndex = providerRef.indexOf(':');
-    if (separatorIndex === -1) {
-      return [providerRef, providerRef];
-    }
-    return [
-      providerRef.substring(0, separatorIndex),
-      providerRef.substring(separatorIndex + 1),
-    ];
   }
 
   private mapBlockchainName(blockchain: string): string {
@@ -344,5 +391,21 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
       ARBITRUM_SEPOLIA: 'arbitrum',
     };
     return mapping[blockchain] ?? 'base';
+  }
+
+  /**
+   * Append or replace partnerUserRef in an onramp URL. Coinbase may return
+   * onramp_url from the quote API — we still need to ensure partnerUserRef is set.
+   */
+  private buildOnrampUrl(baseUrl: string, partnerUserRef: string): string {
+    const url = new URL(baseUrl);
+    url.searchParams.set('partnerUserRef', partnerUserRef);
+    return url.toString();
+  }
+
+  private buildOfframpUrl(baseUrl: string, partnerUserRef: string): string {
+    const url = new URL(baseUrl);
+    url.searchParams.set('partnerUserRef', partnerUserRef);
+    return url.toString();
   }
 }

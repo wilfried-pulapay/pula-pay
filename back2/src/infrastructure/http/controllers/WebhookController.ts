@@ -10,7 +10,7 @@ import { WalletProvider } from '../../../domain/ports/WalletProvider';
 import { logger } from '../../../shared/utils/logger';
 
 interface CoinbaseCdpWebhookPayload {
-  event_type:
+  eventType:
     | 'onramp.transaction.created'
     | 'onramp.transaction.updated'
     | 'onramp.transaction.success'
@@ -19,8 +19,8 @@ interface CoinbaseCdpWebhookPayload {
     | 'offramp.transaction.updated'
     | 'offramp.transaction.success'
     | 'offramp.transaction.failed';
-  transaction_id: string;
-  partner_user_id: string;
+  transactionId: string;
+  partnerUserRef: string;
   status: string;
   metadata?: Record<string, unknown>;
 }
@@ -58,9 +58,10 @@ export class WebhookController {
   ): Promise<void> => {
     try {
       // Validate webhook
+      const rawBody = (req as any).rawBody as string | undefined;
       const isValid = this.coinbaseCdpProvider.validateWebhook(
         req.headers as Record<string, string>,
-        req.body
+        rawBody ?? JSON.stringify(req.body)
       );
 
       if (!isValid) {
@@ -82,24 +83,24 @@ export class WebhookController {
       const payload = req.body as CoinbaseCdpWebhookPayload;
 
       logger.info(
-        { eventType: payload.event_type, transactionId: payload.transaction_id },
+        { eventType: payload.eventType, partnerUserRef: payload.partnerUserRef },
         'Coinbase CDP webhook received'
       );
 
       // Process terminal status events
-      if (payload.event_type.endsWith('.success') || payload.event_type.endsWith('.failed')) {
+      if (payload.eventType.endsWith('.success') || payload.eventType.endsWith('.failed')) {
         await this.confirmDepositHandler.execute({
-          providerRef: payload.transaction_id,
-          providerStatus: payload.event_type.endsWith('.success') ? 'success' : 'failed',
+          providerRef: payload.partnerUserRef,
+          providerStatus: payload.eventType.endsWith('.success') ? 'success' : 'failed',
           metadata: {
-            partnerUserId: payload.partner_user_id,
+            transactionId: payload.transactionId,
             coinbaseStatus: payload.status,
             ...payload.metadata,
           },
         });
 
         // Cancel polling + expiry jobs (no longer needed)
-        await this.cancelRelatedJobs(payload.transaction_id);
+        await this.cancelRelatedJobs(payload.partnerUserRef);
       }
 
       // Always acknowledge receipt

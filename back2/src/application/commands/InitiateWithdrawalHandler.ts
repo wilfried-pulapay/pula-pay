@@ -19,6 +19,7 @@ export interface InitiateWithdrawalCommand {
   idempotencyKey?: string;
   country?: string;
   paymentMethod?: string;
+  clientIp?: string;
 }
 
 export interface InitiateWithdrawalResult {
@@ -87,7 +88,10 @@ export class InitiateWithdrawalHandler {
       description: 'Withdrawal via Coinbase',
     });
 
-    // 7. Initiate payout via provider (Coinbase CDP)
+    // 7. Compute partnerUserRef: unique per transaction, embedded in widget URL
+    const partnerUserRef = `pulapay_${transaction.id}`;
+
+    // 8. Initiate payout via provider (Coinbase CDP)
     const payoutResult = await this.onRampProvider.initiatePayout({
       userId: command.userId,
       amount: amountUsdc.toNumber(),
@@ -98,27 +102,28 @@ export class InitiateWithdrawalHandler {
       country: command.country ?? config.coinbase.defaultCountry,
       paymentMethod: command.paymentMethod ?? 'ACH_BANK_ACCOUNT',
       cashoutCurrency: command.fiatCurrency,
+      partnerUserRef,
+      clientIp: command.clientIp,
     });
 
-    // 8. Create OnRampTransaction
+    // 9. Create OnRampTransaction (providerRef = partnerUserRef for polling)
     await this.txRepo.createOnRampDetails({
       transactionId: transaction.id,
       provider: this.onRampProvider.providerCode,
-      providerRef: payoutResult.providerRef,
+      providerRef: partnerUserRef,
       fiatCurrency: command.fiatCurrency,
       fiatAmount: fiatAmount,
       providerStatus: payoutResult.status,
     });
 
-    // 9. Update status → PROCESSING
-    const compositeRef = `${command.userId}:${payoutResult.providerRef}`;
-    transaction.markProcessing(payoutResult.providerRef);
+    // 10. Update status → PROCESSING
+    transaction.markProcessing(partnerUserRef);
     await this.txRepo.update(transaction);
 
     logger.info(
       {
         transactionId: transaction.id,
-        providerRef: payoutResult.providerRef,
+        partnerUserRef,
         amountUsdc: amountUsdc.toString(),
         fee: fee.toString(),
         paymentUrl: payoutResult.paymentUrl,
@@ -126,17 +131,19 @@ export class InitiateWithdrawalHandler {
       'Withdrawal initiated'
     );
 
-    // 10. Enqueue BullMQ polling job
+    // 11. Enqueue BullMQ polling job — retries every 15s for up to 10 min
     await this.coinbasePollingQueue.add(
       `poll-withdrawal-${transaction.id}`,
       {
         transactionId: transaction.id,
-        partnerUserRef: compositeRef,
+        partnerUserRef,
         type: 'OFFRAMP' as const,
         idempotencyKey,
       },
       {
         delay: 15_000,
+        attempts: 40,
+        backoff: { type: 'fixed', delay: 15_000 },
         jobId: `withdraw-${idempotencyKey}`,
       },
     );

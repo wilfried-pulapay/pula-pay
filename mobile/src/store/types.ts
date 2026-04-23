@@ -1,5 +1,6 @@
 import {
     TxDTO,
+    TxStatus,
     DepositRequest,
     DepositResponse,
     WithdrawRequest,
@@ -60,7 +61,7 @@ export type WalletState = {
     reconcileBalance: () => Promise<void>;
 
     // Actions - Track
-    trackTransaction: (txId: string) => Promise<void>;
+    trackTransaction: (txId: string) => Promise<TxStatus>;
     reset: () => void;
 };
 

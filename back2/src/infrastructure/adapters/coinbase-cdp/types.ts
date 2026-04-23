@@ -74,14 +74,14 @@ export interface CoinbaseSellQuoteResponse {
 // ============================================
 
 export type CoinbaseTransactionStatus =
-  | 'ONRAMP_TRANSACTION_STATUS_CREATED'
+  // Onramp statuses (ONRAMP_TRANSACTION_STATUS_*)
   | 'ONRAMP_TRANSACTION_STATUS_IN_PROGRESS'
   | 'ONRAMP_TRANSACTION_STATUS_SUCCESS'
   | 'ONRAMP_TRANSACTION_STATUS_FAILED'
-  | 'OFFRAMP_TRANSACTION_STATUS_CREATED'
-  | 'OFFRAMP_TRANSACTION_STATUS_IN_PROGRESS'
-  | 'OFFRAMP_TRANSACTION_STATUS_SUCCESS'
-  | 'OFFRAMP_TRANSACTION_STATUS_FAILED';
+  // Offramp statuses (TRANSACTION_STATUS_* — no OFFRAMP_ prefix per API)
+  | 'TRANSACTION_STATUS_STARTED'
+  | 'TRANSACTION_STATUS_SUCCESS'
+  | 'TRANSACTION_STATUS_FAILED';
 
 export interface CoinbaseTransaction {
   transaction_id: string;
@@ -106,8 +106,9 @@ export interface CoinbaseTransactionsResponse {
 // Webhook
 // ============================================
 
+// Coinbase sends camelCase webhook payloads (not snake_case)
 export interface CoinbaseCdpWebhookPayload {
-  event_type:
+  eventType:
     | 'onramp.transaction.created'
     | 'onramp.transaction.updated'
     | 'onramp.transaction.success'
@@ -116,8 +117,8 @@ export interface CoinbaseCdpWebhookPayload {
     | 'offramp.transaction.updated'
     | 'offramp.transaction.success'
     | 'offramp.transaction.failed';
-  transaction_id: string;
-  partner_user_id: string;
-  status: CoinbaseTransactionStatus;
+  transactionId: string;
+  partnerUserRef: string;
+  status: string;
   metadata?: Record<string, unknown>;
 }

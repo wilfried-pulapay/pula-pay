@@ -19,6 +19,7 @@ export interface InitiateDepositCommand {
   idempotencyKey?: string;
   country?: string;
   paymentMethod?: string;
+  clientIp?: string;
 }
 
 export interface InitiateDepositResult {
@@ -80,7 +81,11 @@ export class InitiateDepositHandler {
       description: 'Top-up via Coinbase',
     });
 
-    // 5. Initiate deposit via provider (Coinbase CDP)
+    // 5. Compute partnerUserRef: unique per transaction, embedded in widget URL
+    //    so Coinbase links sessions to the Transaction Status API
+    const partnerUserRef = `pulapay_${transaction.id}`;
+
+    // 6. Initiate deposit via provider (Coinbase CDP)
     const depositResult = await this.onRampProvider.initiateDeposit({
       userId: command.userId,
       amount: command.fiatAmount,
@@ -91,49 +96,52 @@ export class InitiateDepositHandler {
       blockchain: wallet.blockchain,
       country: command.country ?? config.coinbase.defaultCountry,
       paymentMethod: command.paymentMethod ?? 'CARD',
+      partnerUserRef,
+      clientIp: command.clientIp,
     });
 
-    // 6. Create OnRampTransaction
+    // 7. Create OnRampTransaction (providerRef = partnerUserRef for polling)
     await this.txRepo.createOnRampDetails({
       transactionId: transaction.id,
       provider: this.onRampProvider.providerCode,
-      providerRef: depositResult.providerRef,
+      providerRef: partnerUserRef,
       fiatCurrency: command.fiatCurrency,
       fiatAmount: new Decimal(command.fiatAmount),
       providerStatus: depositResult.status,
     });
 
-    // 7. Update status → PROCESSING
-    const compositeRef = `${command.userId}:${depositResult.providerRef}`;
-    transaction.markProcessing(depositResult.providerRef);
+    // 8. Update status → PROCESSING
+    transaction.markProcessing(partnerUserRef);
     await this.txRepo.update(transaction);
 
     logger.info(
       {
         transactionId: transaction.id,
-        providerRef: depositResult.providerRef,
+        partnerUserRef,
         amountUsdc: amountUsdc.toString(),
         paymentUrl: depositResult.paymentUrl,
       },
       'Deposit initiated'
     );
 
-    // 8. Enqueue BullMQ polling job (durable, survives restarts)
+    // 9. Enqueue BullMQ polling job — retries every 15s for up to 10 min
     await this.coinbasePollingQueue.add(
       `poll-deposit-${transaction.id}`,
       {
         transactionId: transaction.id,
-        partnerUserRef: compositeRef,
+        partnerUserRef,
         type: 'ONRAMP' as const,
         idempotencyKey,
       },
       {
         delay: 15_000,
+        attempts: 40,
+        backoff: { type: 'fixed', delay: 15_000 },
         jobId: idempotencyKey,
       },
     );
 
-    // 9. Schedule expiry (10 min timeout)
+    // 10. Schedule expiry (10 min timeout)
     await this.txExpiryQueue.add(
       `expire-${transaction.id}`,
       { transactionId: transaction.id },
@@ -143,7 +151,7 @@ export class InitiateDepositHandler {
       },
     );
 
-    return this.toResult(transaction, depositResult.providerRef, depositResult.paymentUrl, depositResult.fees);
+    return this.toResult(transaction, partnerUserRef, depositResult.paymentUrl, depositResult.fees);
   }
 
   private toResult(

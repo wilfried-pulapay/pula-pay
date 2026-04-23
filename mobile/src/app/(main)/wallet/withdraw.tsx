@@ -16,7 +16,7 @@ import Button from '@/src/components/ui/button';
 import ExchangeRateIndicator from '@/src/components/exchange-rate';
 import CoinbaseWebView from '@/src/components/coinbase-webview';
 import type { Theme } from '@/src/theme/types';
-import type { PaymentMethod } from '@/src/api/types';
+import type { PaymentMethod, TxStatus, WithdrawResponse } from '@/src/api/types';
 
 type WithdrawMethod = {
     id: PaymentMethod;
@@ -30,6 +30,22 @@ const WITHDRAW_METHODS: WithdrawMethod[] = [
     { id: 'CARD', name: 'Card', icon: CreditCard, available: true },
 ];
 
+type TxPhase = 'idle' | 'webview' | 'polling' | 'completed' | 'failed';
+
+type SubmittedTx = {
+    txId: string;
+    amount: string;
+    amountUsdc: string;
+    method: string;
+    fees?: WithdrawResponse['fees'];
+};
+
+const generateIdempotencyKey = () =>
+    `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+// The backend sets redirectUrl = ${API_URL}/onramp-complete for the offramp widget.
+const OFFRAMP_REDIRECT_URL = `${process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000'}/onramp-complete`;
+
 export default function Withdraw() {
     const { t, i18n } = useTranslation();
     const theme = useTheme();
@@ -39,13 +55,8 @@ export default function Withdraw() {
     const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('ACH_BANK_ACCOUNT');
     const [amount, setAmount] = useState('');
     const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-    const [showWebView, setShowWebView] = useState(false);
-    const [submittedTx, setSubmittedTx] = useState<{
-        amount: string;
-        amountUsdc: string;
-        method: string;
-        txId: string | null;
-    } | null>(null);
+    const [txPhase, setTxPhase] = useState<TxPhase>('idle');
+    const [submittedTx, setSubmittedTx] = useState<SubmittedTx | null>(null);
 
     const { user } = useAuth();
     const { withdraw, loading, error, displayCurrency, balanceUsdc, syncWalletStatus, trackTransaction } = useWalletStore();
@@ -62,20 +73,27 @@ export default function Withdraw() {
     const estimatedUsdc = amount ? toUsdc(amount) : '0';
     const availableDisplay = balanceUsdc ? toDisplay(balanceUsdc) : '—';
 
+    const startPolling = (txId: string) => {
+        setTxPhase('polling');
+        trackTransaction(txId)
+            .then((status: TxStatus) => {
+                setTxPhase(status === 'COMPLETED' ? 'completed' : 'failed');
+            })
+            .catch(() => setTxPhase('failed'));
+    };
+
     const handleSubmit = async () => {
         if (!user?.id) {
             toast.error(t('errors.unauthenticated'));
             return;
         }
 
-        // Check if user has enough balance
         if (balanceUsdc && parseFloat(estimatedUsdc) > parseFloat(balanceUsdc)) {
             toast.error(t('withdraw.insufficientFunds'));
             return;
         }
 
         try {
-            // Check and sync wallet status before attempting transaction
             toast.info(t('withdraw.checkingWallet'), 3000);
             const { wasUpdated, currentStatus } = await syncWalletStatus();
 
@@ -88,30 +106,30 @@ export default function Withdraw() {
                 return;
             }
 
-            const response = await withdraw({
-                amount: parseFloat(amount),
-                targetCurrency: displayCurrency,
-                paymentMethod: selectedMethod,
-            });
+            const idempotencyKey = generateIdempotencyKey();
+            const response = await withdraw(
+                { amount: parseFloat(amount), targetCurrency: displayCurrency, paymentMethod: selectedMethod },
+                { idempotencyKey }
+            );
 
-            // If we got a payment URL, open the Coinbase WebView
-            if (response.paymentUrl) {
-                setPaymentUrl(response.paymentUrl);
-                setShowWebView(true);
-                // Start tracking in background
-                trackTransaction(response.transactionId);
-            }
-
-            setSubmittedTx({
+            const tx: SubmittedTx = {
+                txId: response.transactionId,
                 amount,
                 amountUsdc: response.amountUsdc,
                 method: selectedMethod,
-                txId: response.transactionId,
-            });
+                fees: response.fees,
+            };
+            setSubmittedTx(tx);
+
+            if (response.paymentUrl) {
+                setPaymentUrl(response.paymentUrl);
+                setTxPhase('webview');
+            } else {
+                startPolling(response.transactionId);
+            }
         } catch (err: unknown) {
             const { code, translationKey, message } = getApiError(err);
-            const errorMessage = message || t(translationKey);
-            toast.error(errorMessage, 6000);
+            toast.error(message || t(translationKey), 6000);
             if (code === 'WALLET_NOT_FOUND') {
                 router.replace('/(main)/dashboard');
             }
@@ -119,26 +137,42 @@ export default function Withdraw() {
     };
 
     const handleWebViewClose = () => {
-        setShowWebView(false);
         setPaymentUrl(null);
         if (submittedTx) {
-            toast.success(t('withdraw.success'));
+            startPolling(submittedTx.txId);
+        } else {
+            setTxPhase('idle');
         }
     };
 
-    // Show WebView for Coinbase payment
-    if (showWebView && paymentUrl) {
+    // ── WebView ──────────────────────────────────────────────────────
+    if (txPhase === 'webview' && paymentUrl) {
         return (
             <CoinbaseWebView
                 paymentUrl={paymentUrl}
-                visible={showWebView}
+                visible
+                redirectUrl={OFFRAMP_REDIRECT_URL}
                 onClose={handleWebViewClose}
-                onComplete={handleWebViewClose}
+                onSuccess={handleWebViewClose}
             />
         );
     }
 
-    if (submittedTx && !showWebView) {
+    // ── Polling / Processing ─────────────────────────────────────────
+    if (txPhase === 'polling') {
+        return (
+            <Screen>
+                <View style={styles.statusContainer}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text style={styles.statusTitle}>{t('withdraw.processing')}</Text>
+                    <Text style={styles.statusSubtitle}>{t('withdraw.processingSubtitle')}</Text>
+                </View>
+            </Screen>
+        );
+    }
+
+    // ── Success ──────────────────────────────────────────────────────
+    if (txPhase === 'completed' && submittedTx) {
         return (
             <Screen>
                 <ArrowLeft onPress={() => router.replace('/(main)/wallet')} color={theme.colors.text} />
@@ -146,17 +180,25 @@ export default function Withdraw() {
                     <Text style={styles.successTitle}>{t('withdraw.success')}</Text>
                     <View style={styles.detailsContainer}>
                         <Text style={styles.label}>{t('withdraw.method')}:</Text>
-                        <Text style={styles.value}>{t(`withdraw.${selectedMethod.toLowerCase()}`)}</Text>
+                        <Text style={styles.value}>{t(`withdraw.${selectedMethod.toLowerCase()}`) || selectedMethod}</Text>
                         <Text style={styles.label}>{t('withdraw.amount')}:</Text>
                         <Text style={styles.value}>{formatAmount(submittedTx.amount)}</Text>
                         <Text style={styles.label}>{t('withdraw.amountUsdc')}:</Text>
                         <Text style={styles.value}>~{parseFloat(submittedTx.amountUsdc).toFixed(2)} USDC</Text>
-                        {submittedTx.txId && (
+                        {submittedTx.fees?.coinbaseFee && (
                             <>
-                                <Text style={styles.label}>{t('withdraw.txId')}:</Text>
-                                <Text style={styles.value}>{submittedTx.txId}</Text>
+                                <Text style={styles.label}>{t('withdraw.coinbaseFee')}:</Text>
+                                <Text style={styles.value}>{submittedTx.fees.coinbaseFee}</Text>
                             </>
                         )}
+                        {submittedTx.fees?.cashoutTotal && (
+                            <>
+                                <Text style={styles.label}>{t('withdraw.cashoutTotal')}:</Text>
+                                <Text style={[styles.value, { color: theme.colors.primary }]}>{submittedTx.fees.cashoutTotal}</Text>
+                            </>
+                        )}
+                        <Text style={styles.label}>{t('withdraw.txId')}:</Text>
+                        <Text style={styles.value}>{submittedTx.txId}</Text>
                     </View>
                     <Button title={t('withdraw.viewTransactions')} onPress={() => router.push('/history')} />
                 </View>
@@ -164,6 +206,21 @@ export default function Withdraw() {
         );
     }
 
+    // ── Failed ───────────────────────────────────────────────────────
+    if (txPhase === 'failed' && submittedTx) {
+        return (
+            <Screen>
+                <ArrowLeft onPress={() => { setTxPhase('idle'); setSubmittedTx(null); }} color={theme.colors.text} />
+                <View style={styles.container}>
+                    <Text style={[styles.successTitle, { color: theme.colors.danger }]}>{t('withdraw.failed')}</Text>
+                    <Text style={styles.statusSubtitle}>{t('withdraw.failedSubtitle')}</Text>
+                    <Button title={t('withdraw.tryAgain')} onPress={() => { setTxPhase('idle'); setSubmittedTx(null); }} />
+                </View>
+            </Screen>
+        );
+    }
+
+    // ── Form ─────────────────────────────────────────────────────────
     return (
         <Screen>
             <ArrowLeft onPress={() => router.replace('/(main)/wallet')} color={theme.colors.text} />
@@ -178,7 +235,6 @@ export default function Withdraw() {
                     )}
                 </View>
 
-                {/* Method Selection */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>{t('withdraw.method')}</Text>
                     <View style={styles.methodGrid}>
@@ -188,20 +244,11 @@ export default function Withdraw() {
                             return (
                                 <TouchableOpacity
                                     key={method.id}
-                                    style={[
-                                        styles.methodCard,
-                                        isSelected && styles.methodCardSelected,
-                                    ]}
+                                    style={[styles.methodCard, isSelected && styles.methodCardSelected]}
                                     onPress={() => setSelectedMethod(method.id)}
                                 >
-                                    <Icon
-                                        size={24}
-                                        color={isSelected ? theme.colors.primary : theme.colors.text}
-                                    />
-                                    <Text style={[
-                                        styles.methodName,
-                                        isSelected && styles.methodNameSelected,
-                                    ]}>
+                                    <Icon size={24} color={isSelected ? theme.colors.primary : theme.colors.text} />
+                                    <Text style={[styles.methodName, isSelected && styles.methodNameSelected]}>
                                         {t(`withdraw.${method.id.toLowerCase()}`) || method.name}
                                     </Text>
                                     {isSelected && (
@@ -360,6 +407,24 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         fontSize: 11,
         color: theme.colors.danger,
         marginTop: theme.spacing.xs,
+    },
+    statusContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: theme.spacing.m,
+    },
+    statusTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginTop: theme.spacing.m,
+    },
+    statusSubtitle: {
+        fontSize: 14,
+        color: theme.colors.textMuted,
+        textAlign: 'center',
+        marginTop: theme.spacing.s,
     },
     successTitle: {
         fontSize: 22,

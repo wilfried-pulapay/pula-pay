@@ -10,11 +10,13 @@ import { useStyles } from '@/src/hooks/use-styles';
 type CoinbaseWebViewProps = {
     paymentUrl: string;
     visible: boolean;
+    /** URL that Coinbase redirects to on offramp completion (e.g. "{apiUrl}/onramp-complete"). */
+    redirectUrl?: string;
     onClose: () => void;
-    onComplete?: () => void;
+    onSuccess?: () => void;
 };
 
-export default function CoinbaseWebView({ paymentUrl, visible, onClose, onComplete }: CoinbaseWebViewProps) {
+export default function CoinbaseWebView({ paymentUrl, visible, redirectUrl, onClose, onSuccess }: CoinbaseWebViewProps) {
     const { t } = useTranslation();
     const theme = useTheme();
     const styles = useStyles(getStyles);
@@ -22,9 +24,14 @@ export default function CoinbaseWebView({ paymentUrl, visible, onClose, onComple
 
     const handleNavigationChange = (navState: WebViewNavigation) => {
         const { url } = navState;
-        // Detect success/complete URLs from Coinbase widget
-        if (url.includes('success') || url.includes('complete') || url.includes('done')) {
-            onComplete?.();
+        // For offramp: Coinbase redirects to our redirectUrl when the sell is complete.
+        if (redirectUrl && url.startsWith(redirectUrl)) {
+            onSuccess?.();
+            return;
+        }
+        // Fallback: detect the /onramp-complete path in case redirectUrl wasn't passed.
+        if (url.includes('/onramp-complete')) {
+            onSuccess?.();
         }
     };
 

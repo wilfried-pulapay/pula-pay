@@ -231,8 +231,8 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         }
     },
 
-    // Track transaction status
-    trackTransaction: async (txId: string) => {
+    // Track transaction status — polls every 2s until terminal, then refreshes balance/history
+    trackTransaction: async (txId: string): Promise<TxStatus> => {
         let status: TxStatus = "PENDING";
 
         while (status === "PENDING" || status === "PROCESSING") {
@@ -240,11 +240,12 @@ export const useWalletStore = create<WalletState>((set, get) => ({
             status = await getTxStatus(txId);
         }
 
-        // Refresh data after transaction completes
         await Promise.all([
             get().fetchBalance(),
             get().fetchTransactions(),
         ]);
+
+        return status;
     },
 
     // Reset store

@@ -16,7 +16,7 @@ import Button from '@/src/components/ui/button';
 import ExchangeRateIndicator from '@/src/components/exchange-rate';
 import CoinbaseWebView from '@/src/components/coinbase-webview';
 import type { Theme } from '@/src/theme/types';
-import type { PaymentMethod } from '@/src/api/types';
+import type { PaymentMethod, TxStatus, DepositResponse } from '@/src/api/types';
 
 type DepositMethod = {
     id: PaymentMethod | 'CRYPTO';
@@ -32,6 +32,19 @@ const DEPOSIT_METHODS: DepositMethod[] = [
     { id: 'CRYPTO', name: 'Receive Crypto', icon: Download, available: true },
 ];
 
+type TxPhase = 'idle' | 'webview' | 'polling' | 'completed' | 'failed';
+
+type SubmittedTx = {
+    txId: string;
+    amount: string;
+    amountUsdc: string;
+    method: string;
+    fees?: DepositResponse['fees'];
+};
+
+const generateIdempotencyKey = () =>
+    `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
 export default function Deposit() {
     const { t, i18n } = useTranslation();
     const theme = useTheme();
@@ -41,13 +54,8 @@ export default function Deposit() {
     const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('CARD');
     const [amount, setAmount] = useState('');
     const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-    const [showWebView, setShowWebView] = useState(false);
-    const [submittedTx, setSubmittedTx] = useState<{
-        amount: string;
-        amountUsdc: string;
-        method: string;
-        txId: string | null;
-    } | null>(null);
+    const [txPhase, setTxPhase] = useState<TxPhase>('idle');
+    const [submittedTx, setSubmittedTx] = useState<SubmittedTx | null>(null);
 
     const { user } = useAuth();
     const { deposit, loading, error, displayCurrency, syncWalletStatus, trackTransaction } = useWalletStore();
@@ -71,6 +79,15 @@ export default function Deposit() {
         setSelectedMethod(method);
     };
 
+    const startPolling = (txId: string) => {
+        setTxPhase('polling');
+        trackTransaction(txId)
+            .then((status: TxStatus) => {
+                setTxPhase(status === 'COMPLETED' ? 'completed' : 'failed');
+            })
+            .catch(() => setTxPhase('failed'));
+    };
+
     const handleSubmit = async () => {
         if (!user?.id) {
             toast.error(t('errors.unauthenticated'));
@@ -78,7 +95,6 @@ export default function Deposit() {
         }
 
         try {
-            // Check and sync wallet status before attempting transaction
             toast.info(t('deposit.checkingWallet'), 3000);
             const { wasUpdated, currentStatus } = await syncWalletStatus();
 
@@ -91,30 +107,30 @@ export default function Deposit() {
                 return;
             }
 
-            const response = await deposit({
-                amount: parseFloat(amount),
-                currency: displayCurrency,
-                paymentMethod: selectedMethod,
-            });
+            const idempotencyKey = generateIdempotencyKey();
+            const response = await deposit(
+                { amount: parseFloat(amount), currency: displayCurrency, paymentMethod: selectedMethod },
+                { idempotencyKey }
+            );
 
-            // If we got a payment URL, open the Coinbase WebView
-            if (response.paymentUrl) {
-                setPaymentUrl(response.paymentUrl);
-                setShowWebView(true);
-                // Start tracking in background
-                trackTransaction(response.transactionId);
-            }
-
-            setSubmittedTx({
+            const tx: SubmittedTx = {
+                txId: response.transactionId,
                 amount,
                 amountUsdc: response.amountUsdc,
                 method: selectedMethod,
-                txId: response.transactionId,
-            });
+                fees: response.fees,
+            };
+            setSubmittedTx(tx);
+
+            if (response.paymentUrl) {
+                setPaymentUrl(response.paymentUrl);
+                setTxPhase('webview');
+            } else {
+                startPolling(response.transactionId);
+            }
         } catch (err: unknown) {
             const { code, translationKey, message } = getApiError(err);
-            const errorMessage = message || t(translationKey);
-            toast.error(errorMessage, 6000);
+            toast.error(message || t(translationKey), 6000);
             if (code === 'WALLET_NOT_FOUND') {
                 router.replace('/(main)/dashboard');
             }
@@ -122,27 +138,41 @@ export default function Deposit() {
     };
 
     const handleWebViewClose = () => {
-        setShowWebView(false);
         setPaymentUrl(null);
-        // If we have a submitted transaction, show success
         if (submittedTx) {
-            toast.success(t('deposit.success'));
+            startPolling(submittedTx.txId);
+        } else {
+            setTxPhase('idle');
         }
     };
 
-    // Show WebView for Coinbase payment
-    if (showWebView && paymentUrl) {
+    // ── WebView ──────────────────────────────────────────────────────
+    if (txPhase === 'webview' && paymentUrl) {
         return (
             <CoinbaseWebView
                 paymentUrl={paymentUrl}
-                visible={showWebView}
+                visible
                 onClose={handleWebViewClose}
-                onComplete={handleWebViewClose}
+                onSuccess={handleWebViewClose}
             />
         );
     }
 
-    if (submittedTx && !showWebView) {
+    // ── Polling / Processing ─────────────────────────────────────────
+    if (txPhase === 'polling') {
+        return (
+            <Screen>
+                <View style={styles.statusContainer}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                    <Text style={styles.statusTitle}>{t('deposit.processing')}</Text>
+                    <Text style={styles.statusSubtitle}>{t('deposit.processingSubtitle')}</Text>
+                </View>
+            </Screen>
+        );
+    }
+
+    // ── Success ──────────────────────────────────────────────────────
+    if (txPhase === 'completed' && submittedTx) {
         return (
             <Screen>
                 <ArrowLeft onPress={() => router.replace('/(main)/wallet')} color={theme.colors.text} />
@@ -150,17 +180,31 @@ export default function Deposit() {
                     <Text style={styles.successTitle}>{t('deposit.success')}</Text>
                     <View style={styles.detailsContainer}>
                         <Text style={styles.label}>{t('deposit.paymentMethod')}:</Text>
-                        <Text style={styles.value}>{t(`deposit.${selectedMethod.toLowerCase()}`)}</Text>
+                        <Text style={styles.value}>{t(`deposit.${selectedMethod.toLowerCase()}`) || selectedMethod}</Text>
                         <Text style={styles.label}>{t('deposit.amount')}:</Text>
                         <Text style={styles.value}>{formatAmount(submittedTx.amount)}</Text>
                         <Text style={styles.label}>{t('deposit.equivalentUsdc')}:</Text>
                         <Text style={styles.value}>~{parseFloat(submittedTx.amountUsdc).toFixed(2)} USDC</Text>
-                        {submittedTx.txId && (
+                        {submittedTx.fees?.coinbaseFee && (
                             <>
-                                <Text style={styles.label}>{t('deposit.txId')}:</Text>
-                                <Text style={styles.value}>{submittedTx.txId}</Text>
+                                <Text style={styles.label}>{t('deposit.coinbaseFee')}:</Text>
+                                <Text style={styles.value}>{submittedTx.fees.coinbaseFee}</Text>
                             </>
                         )}
+                        {submittedTx.fees?.networkFee && (
+                            <>
+                                <Text style={styles.label}>{t('deposit.networkFee')}:</Text>
+                                <Text style={styles.value}>{submittedTx.fees.networkFee}</Text>
+                            </>
+                        )}
+                        {submittedTx.fees?.paymentTotal && (
+                            <>
+                                <Text style={styles.label}>{t('deposit.paymentTotal')}:</Text>
+                                <Text style={[styles.value, { color: theme.colors.primary }]}>{submittedTx.fees.paymentTotal}</Text>
+                            </>
+                        )}
+                        <Text style={styles.label}>{t('deposit.txId')}:</Text>
+                        <Text style={styles.value}>{submittedTx.txId}</Text>
                     </View>
                     <Button title={t('deposit.viewTransactions')} onPress={() => router.push('/history')} />
                 </View>
@@ -168,13 +212,27 @@ export default function Deposit() {
         );
     }
 
+    // ── Failed ───────────────────────────────────────────────────────
+    if ((txPhase === 'failed') && submittedTx) {
+        return (
+            <Screen>
+                <ArrowLeft onPress={() => { setTxPhase('idle'); setSubmittedTx(null); }} color={theme.colors.text} />
+                <View style={styles.container}>
+                    <Text style={[styles.successTitle, { color: theme.colors.danger }]}>{t('deposit.failed')}</Text>
+                    <Text style={styles.statusSubtitle}>{t('deposit.failedSubtitle')}</Text>
+                    <Button title={t('deposit.tryAgain')} onPress={() => { setTxPhase('idle'); setSubmittedTx(null); }} />
+                </View>
+            </Screen>
+        );
+    }
+
+    // ── Form ─────────────────────────────────────────────────────────
     return (
         <Screen>
             <ArrowLeft onPress={() => router.replace('/(main)/wallet')} color={theme.colors.text} />
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <Text style={styles.title}>{t('deposit.title')}</Text>
 
-                {/* Method Selection */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>{t('deposit.selectMethod')}</Text>
                     <View style={styles.methodGrid}>
@@ -192,10 +250,7 @@ export default function Deposit() {
                                     onPress={() => method.available && handleMethodSelect(method.id)}
                                     disabled={!method.available}
                                 >
-                                    <Icon
-                                        size={24}
-                                        color={isSelected ? theme.colors.primary : theme.colors.text}
-                                    />
+                                    <Icon size={24} color={isSelected ? theme.colors.primary : theme.colors.text} />
                                     <Text style={[
                                         styles.methodName,
                                         isSelected && styles.methodNameSelected,
@@ -214,7 +269,6 @@ export default function Deposit() {
                     </View>
                 </View>
 
-                {/* Amount Input */}
                 {(selectedMethod as string) !== 'CRYPTO' && (
                     <>
                         <View style={styles.inputGroup}>
@@ -347,6 +401,24 @@ const getStyles = (theme: Theme) => StyleSheet.create({
         fontSize: 11,
         color: theme.colors.danger,
         marginTop: theme.spacing.xs,
+    },
+    statusContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: theme.spacing.m,
+    },
+    statusTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginTop: theme.spacing.m,
+    },
+    statusSubtitle: {
+        fontSize: 14,
+        color: theme.colors.textMuted,
+        textAlign: 'center',
+        marginTop: theme.spacing.s,
     },
     successTitle: {
         fontSize: 22,
