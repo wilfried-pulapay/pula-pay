@@ -110,7 +110,15 @@
         "completingPayment": "Finalisez votre paiement",
         "checkingWallet": "Vérification du portefeuille...",
         "walletActivated": "Portefeuille activé avec succès !",
-        "walletNotActive": "Le portefeuille n'est pas actif. Veuillez réessayer dans quelques instants."
+        "walletNotActive": "Le portefeuille n'est pas actif. Veuillez réessayer dans quelques instants.",
+        "processing": "Paiement en cours",
+        "processingSubtitle": "Nous attendons la confirmation de votre paiement. Cela peut prendre quelques minutes.",
+        "failed": "Paiement échoué",
+        "failedSubtitle": "Votre paiement n'a pas pu être finalisé. Aucun fonds n'a été débité.",
+        "tryAgain": "Réessayer",
+        "coinbaseFee": "Frais Coinbase",
+        "networkFee": "Frais réseau",
+        "paymentTotal": "Total débité"
     },
     "withdraw": {
         "title": "Demande de retrait",
@@ -131,7 +139,14 @@
         "insufficientFunds": "Solde insuffisant",
         "checkingWallet": "Vérification du portefeuille...",
         "walletActivated": "Portefeuille activé avec succès !",
-        "walletNotActive": "Le portefeuille n'est pas actif. Veuillez réessayer dans quelques instants."
+        "walletNotActive": "Le portefeuille n'est pas actif. Veuillez réessayer dans quelques instants.",
+        "processing": "Retrait en cours",
+        "processingSubtitle": "Nous attendons la confirmation de votre retrait. Cela peut prendre quelques minutes.",
+        "failed": "Retrait échoué",
+        "failedSubtitle": "Votre retrait n'a pas pu être finalisé. Votre solde n'a pas été affecté.",
+        "tryAgain": "Réessayer",
+        "coinbaseFee": "Frais Coinbase",
+        "cashoutTotal": "Vous recevrez"
     },
     "transfer": {
         "title": "Transfert PulaPay → PulaPay",

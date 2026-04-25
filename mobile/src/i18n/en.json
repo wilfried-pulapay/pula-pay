@@ -110,7 +110,15 @@
         "completingPayment": "Complete your payment",
         "checkingWallet": "Checking wallet status...",
         "walletActivated": "Wallet activated successfully!",
-        "walletNotActive": "Wallet is not active. Please try again in a few moments."
+        "walletNotActive": "Wallet is not active. Please try again in a few moments.",
+        "processing": "Payment in progress",
+        "processingSubtitle": "We're waiting for your payment to be confirmed. This may take a few minutes.",
+        "failed": "Payment failed",
+        "failedSubtitle": "Your payment could not be completed. No funds were debited.",
+        "tryAgain": "Try again",
+        "coinbaseFee": "Coinbase fee",
+        "networkFee": "Network fee",
+        "paymentTotal": "Total charged"
     },
     "withdraw": {
         "title": "Withdrawal request",
@@ -131,7 +139,14 @@
         "insufficientFunds": "Insufficient funds",
         "checkingWallet": "Checking wallet status...",
         "walletActivated": "Wallet activated successfully!",
-        "walletNotActive": "Wallet is not active. Please try again in a few moments."
+        "walletNotActive": "Wallet is not active. Please try again in a few moments.",
+        "processing": "Withdrawal in progress",
+        "processingSubtitle": "We're waiting for your withdrawal to be confirmed. This may take a few minutes.",
+        "failed": "Withdrawal failed",
+        "failedSubtitle": "Your withdrawal could not be completed. Your balance has not been affected.",
+        "tryAgain": "Try again",
+        "coinbaseFee": "Coinbase fee",
+        "cashoutTotal": "You will receive"
     },
     "transfer": {
         "title": "Send to PulaPay user",
