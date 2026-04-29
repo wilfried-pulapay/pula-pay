@@ -29,7 +29,11 @@ export default function Login() {
             const { error: signInError } = await authClient.signIn.email({ email, password });
 
             if (signInError) {
-                setError(signInError.message ?? t("apiErrors.INVALID_CREDENTIALS"));
+                if (signInError.status && signInError.status >= 500) {
+                    setError(t("apiErrors.NETWORK_ERROR"));
+                } else {
+                    setError(signInError.message ?? t("apiErrors.INVALID_CREDENTIALS"));
+                }
             }
             // Session is auto-set by Better Auth — auth layout guard redirects to dashboard
         } catch {
