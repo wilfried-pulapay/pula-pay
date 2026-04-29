@@ -303,7 +303,6 @@ Three BullMQ queues handle async work, backed by Redis:
 |--------------------|----------------------------------------|----------|--------------------|
 | `coinbase-polling` | Poll Coinbase CDP for deposit/withdrawal status | 60 | Fixed 10s delay   |
 | `tx-expiry`        | Expire pending transactions after timeout      | 3  | Exponential (2s base) |
-| `faucet`           | Request testnet USDC tokens via Circle         | 5  | Exponential (3s base) |
 
 Workers are bootstrapped at startup and shut down gracefully (30s timeout).
 
@@ -384,10 +383,10 @@ Adapter: `CoinbaseCdpOnRampAdapter` implements `OnRampProvider` + `QuoteProvider
 | `getOfframpQuote()`   | POST /offramp/v1/sell/quote          | Fee preview for withdrawals       |
 
 Features:
-- ES256 JWT authentication (signed with EC private key from `cdp_api_key.json`)
+- JWT authentication via `@coinbase/cdp-sdk/auth` (`CDP_API_KEY_ID` + `CDP_API_KEY_SECRET`)
 - Redirect-based flow: returns a `paymentUrl` for the user to complete on Coinbase
-- Composite `providerRef` format (`userId:quoteId`) for user-level transaction polling
-- Background polling via BullMQ (replaces in-process polling)
+- `providerRef` format: `"pulapay_{internalTransactionId}"` — embedded in widget URL and used for polling
+- Background polling via BullMQ with webhook cancellation on receipt
 - Supported fiat currencies: USD, EUR
 - Supported payment methods: CARD, ACH_BANK_ACCOUNT, APPLE_PAY
 
@@ -487,10 +486,11 @@ COINGECKO_API_KEY=<api-key>
 XOF_EUR_FIXED_RATE=655.957
 
 # Coinbase CDP
-COINBASE_CDP_API_KEY_NAME=organizations/<org-id>/apiKeys/<key-id>
-COINBASE_CDP_API_KEY_PRIVATE_KEY="-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----"
-COINBASE_CDP_BASE_URL=https://api.developer.coinbase.com
-COINBASE_CDP_DEFAULT_COUNTRY=US
+CDP_API_KEY_ID=<cdp-api-key-id>
+CDP_API_KEY_SECRET=<cdp-api-key-secret>
+CDP_BASE_URL=https://api.developer.coinbase.com
+CDP_DEFAULT_COUNTRY=US
+CDP_WEBHOOK_SECRET=<webhook-signing-secret>   # required — webhooks rejected if unset
 
 # Rate Limiting
 RATE_LIMIT_WINDOW_MS=60000
