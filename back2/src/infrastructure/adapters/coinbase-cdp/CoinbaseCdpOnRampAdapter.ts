@@ -173,7 +173,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
 
     // 3. Build widget URL — partnerUserRef must be in the URL so Coinbase links
     //    the session to the Transaction Status API
-    const paymentUrl = this.buildOnrampUrl(
+    const paymentUrl = this.buildWidgetUrl(
       quoteResponse.onramp_url ?? `https://pay.coinbase.com/buy/select-asset?sessionToken=${session.token}`,
       partnerUserRef
     );
@@ -260,7 +260,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
       presetCryptoAmount: String(params.amount),
       redirectUrl,
     });
-    const paymentUrl = this.buildOfframpUrl(
+    const paymentUrl = this.buildWidgetUrl(
       quoteResponse.offramp_url ?? `https://pay.coinbase.com/v3/sell/input?${fallbackParams}`,
       partnerUserRef
     );
@@ -317,9 +317,8 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
   validateWebhook(headers: Record<string, string>, rawBody: string): boolean {
     const secret = config.coinbase.webhookSecret;
     if (!secret) {
-      // Fail open in dev when no secret is configured, but warn loudly
-      logger.warn('COINBASE_CDP_WEBHOOK_SECRET not set — skipping signature verification');
-      return true;
+      logger.error('COINBASE_CDP_WEBHOOK_SECRET not set — rejecting webhook');
+      return false;
     }
 
     const signatureHeader = headers['x-hook0-signature'];
@@ -332,17 +331,23 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
       const elements = signatureHeader.split(',');
       const timestamp = elements.find((e) => e.startsWith('t='))?.split('=')[1];
       const headerNames = elements.find((e) => e.startsWith('h='))?.split('=')[1];
-      const providedSignature = elements.find((e) => e.startsWith('v1='))?.split('=')[1];
+      // Prefer v1; fall back to v0 (older Coinbase webhook format)
+      const providedSignature =
+        elements.find((e) => e.startsWith('v1='))?.split('=')[1] ??
+        elements.find((e) => e.startsWith('v0='))?.split('=')[1];
 
       if (!timestamp || !headerNames || !providedSignature) {
         logger.warn({ signatureHeader }, 'Malformed X-Hook0-Signature header');
         return false;
       }
 
-      // Replay attack prevention: reject webhooks older than 5 minutes
-      const ageMinutes = (Date.now() - parseInt(timestamp) * 1000) / 60_000;
-      if (ageMinutes > 5) {
-        logger.warn({ ageMinutes }, 'Coinbase webhook timestamp too old');
+      const ageSeconds = Date.now() / 1000 - parseInt(timestamp);
+      if (ageSeconds < -60) {
+        logger.warn({ ageSeconds }, 'Coinbase webhook timestamp is in the future');
+        return false;
+      }
+      if (ageSeconds > 300) {
+        logger.warn({ ageSeconds }, 'Coinbase webhook timestamp too old');
         return false;
       }
 
@@ -393,17 +398,9 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     return mapping[blockchain] ?? 'base';
   }
 
-  /**
-   * Append or replace partnerUserRef in an onramp URL. Coinbase may return
-   * onramp_url from the quote API — we still need to ensure partnerUserRef is set.
-   */
-  private buildOnrampUrl(baseUrl: string, partnerUserRef: string): string {
-    const url = new URL(baseUrl);
-    url.searchParams.set('partnerUserRef', partnerUserRef);
-    return url.toString();
-  }
-
-  private buildOfframpUrl(baseUrl: string, partnerUserRef: string): string {
+  // Append or replace partnerUserRef in a widget URL (used for both onramp and offramp).
+  // Coinbase may return a URL from the quote API — we still need to ensure partnerUserRef is set.
+  private buildWidgetUrl(baseUrl: string, partnerUserRef: string): string {
     const url = new URL(baseUrl);
     url.searchParams.set('partnerUserRef', partnerUserRef);
     return url.toString();
