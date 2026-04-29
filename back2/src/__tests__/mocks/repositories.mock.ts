@@ -65,6 +65,7 @@ export const createMockTransactionRepository = (): jest.Mocked<TransactionReposi
   update: jest.fn(),
   createOnRampDetails: jest.fn(),
   updateOnRampStatus: jest.fn(),
+  setChallengeId: jest.fn(),
   findStalePendingTransfers: jest.fn(),
 });
 
@@ -325,6 +326,10 @@ export class InMemoryTransactionRepository implements TransactionRepository {
     _status: string,
     _data?: Record<string, unknown>
   ): Promise<void> {
+    // In-memory implementation does nothing
+  }
+
+  async setChallengeId(_id: string, _challengeId: string): Promise<void> {
     // In-memory implementation does nothing
   }
 
