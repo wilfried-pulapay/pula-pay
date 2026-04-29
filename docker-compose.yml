@@ -28,6 +28,25 @@ services:
       timeout: 5s
       retries: 3
 
+  api:
+    build:
+      context: ./back2
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./back2/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pulapay_v2
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
