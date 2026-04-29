@@ -55,7 +55,7 @@ export class CoinbaseCdpOnRampAdapter implements OnRampProvider, QuoteProvider {
     path: string,
     body?: Record<string, unknown>
   ): Promise<T> {
-    const jwt = this.auth.generateJwt(method, path);
+    const jwt = await this.auth.generateJwt(method, path);
     const url = `${this.baseUrl}${path}`;
 
     const response = await fetch(url, {
